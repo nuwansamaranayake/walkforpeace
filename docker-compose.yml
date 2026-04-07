@@ -1,0 +1,79 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: walkforpeace
+      POSTGRES_USER: walkforpeace
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-walkforpeace}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U walkforpeace"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://walkforpeace:${DB_PASSWORD:-walkforpeace}@postgres:5432/walkforpeace
+      DATABASE_URL_SYNC: postgresql://walkforpeace:${DB_PASSWORD:-walkforpeace}@postgres:5432/walkforpeace
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      CREDENTIAL_SECRET: ${CREDENTIAL_SECRET:-change-me-credential-secret}
+      EVENT_DATE: "2026-04-21"
+      APP_URL: ${APP_URL:-http://localhost}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      UPLOAD_DIR: /app/uploads
+      R2_ENDPOINT_URL: ${R2_ENDPOINT_URL:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_BUCKET_NAME: ${R2_BUCKET_NAME:-walkforpeace-media}
+      R2_PUBLIC_URL: ${R2_PUBLIC_URL:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-noreply@walkforpeacelk.org}
+      ADMIN_DEFAULT_USERNAME: ${ADMIN_DEFAULT_USERNAME:-admin}
+      ADMIN_DEFAULT_PASSWORD: ${ADMIN_DEFAULT_PASSWORD:-WalkForPeace2026!}
+      FACE_MATCH_THRESHOLD: "0.60"
+    volumes:
+      - uploads:/app/uploads
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build: ./frontend
+    restart: "no"
+    volumes:
+      - frontend_build:/app/dist
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    depends_on:
+      - api
+      - frontend
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - frontend_build:/usr/share/nginx/html:ro
+      - uploads:/app/uploads:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  pgdata:
+  uploads:
+  frontend_build:

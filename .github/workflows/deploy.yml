@@ -1,0 +1,70 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  ci:
+    name: Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Start services
+        run: docker compose up -d postgres api
+
+      - name: Wait for API health check
+        run: |
+          echo "Waiting for API to be ready..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8000/api/health > /dev/null 2>&1; then
+              echo "API is healthy"
+              exit 0
+            fi
+            echo "Attempt $i/30 - waiting 5s..."
+            sleep 5
+          done
+          echo "API failed to become healthy"
+          docker compose logs api
+          exit 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: pip install httpx pytest pytest-asyncio Pillow
+
+      - name: Run tests
+        run: pytest backend/tests/ -v
+
+      - name: Tear down services
+        if: always()
+        run: docker compose down -v
+
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: ci
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            cd /opt/walkforpeace
+            git pull origin main
+            docker compose build --no-cache
+            docker compose up -d
+            docker compose exec -T api alembic upgrade head
+            docker image prune -f

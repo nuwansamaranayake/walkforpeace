@@ -1,0 +1,43 @@
+# Environment
+.env
+.env.local
+.env.production
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+*.db
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# Uploads
+uploads/
+
+# Alembic
+alembic/versions/__pycache__/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+*.log
+
+# Test artifacts
+/test_*.jpg
+/test_*.png
+htmlcov/
+.coverage

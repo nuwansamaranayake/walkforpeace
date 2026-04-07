@@ -1,0 +1,170 @@
+"""Pydantic schemas for API request/response validation."""
+from datetime import datetime
+from typing import Optional
+from uuid import UUID
+
+from pydantic import BaseModel, EmailStr, Field, field_validator
+import re
+
+
+# --- Registration ---
+class RegisterRequest(BaseModel):
+    full_name: str = Field(..., min_length=2, max_length=200)
+    organization: str = Field(..., min_length=2, max_length=200)
+    designation: str = Field(..., min_length=2, max_length=200)
+    email: EmailStr
+    phone: str = Field(..., min_length=5, max_length=50)
+    country: str = Field(..., min_length=2, max_length=100)
+    media_type: str = Field(...)
+    terms_accepted: bool = Field(...)
+
+    @field_validator("media_type")
+    @classmethod
+    def validate_media_type(cls, v):
+        valid = {"print", "tv", "radio", "online", "photographer", "freelance"}
+        if v.lower() not in valid:
+            raise ValueError(f"Invalid media type. Must be one of: {valid}")
+        return v.lower()
+
+    @field_validator("terms_accepted")
+    @classmethod
+    def validate_terms(cls, v):
+        if not v:
+            raise ValueError("Terms must be accepted")
+        return v
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, v):
+        cleaned = re.sub(r"[\s\-\(\)]", "", v)
+        if not re.match(r"^\+?[0-9]{7,15}$", cleaned):
+            raise ValueError("Invalid phone number format")
+        return v
+
+    @field_validator("full_name", "organization", "designation", "country")
+    @classmethod
+    def sanitize_text(cls, v):
+        # Basic XSS prevention
+        v = v.replace("<", "&lt;").replace(">", "&gt;")
+        return v.strip()
+
+
+class RegisterResponse(BaseModel):
+    ref_number: str
+    message: str
+    status: str
+
+
+class StatusResponse(BaseModel):
+    ref_number: str
+    full_name: str
+    organization: str
+    status: str
+    submitted_at: datetime
+    reviewed_at: Optional[datetime] = None
+
+
+# --- Admin Auth ---
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class LoginResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    must_change_password: bool
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str = Field(..., min_length=8)
+
+
+# --- Admin Applications ---
+class ApplicationListItem(BaseModel):
+    id: UUID
+    ref_number: str
+    full_name: str
+    organization: str
+    designation: str
+    email: str
+    media_type: str
+    status: str
+    face_match_score: Optional[float] = None
+    face_match_flagged: bool = False
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ApplicationDetail(ApplicationListItem):
+    phone: str
+    country: str
+    id_document_url: str
+    id_face_crop_url: str
+    face_photo_url: str
+    admin_notes: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
+    reviewed_by: Optional[UUID] = None
+    updated_at: datetime
+    credential: Optional["CredentialInfo"] = None
+
+    model_config = {"from_attributes": True}
+
+
+class ReviewRequest(BaseModel):
+    action: str = Field(..., pattern="^(approve|reject)$")
+    admin_notes: Optional[str] = Field(None, max_length=1000)
+
+
+class ApplicationListResponse(BaseModel):
+    items: list[ApplicationListItem]
+    total: int
+    page: int
+    page_size: int
+
+
+# --- Credentials ---
+class CredentialInfo(BaseModel):
+    id: UUID
+    credential_token: str
+    qr_code_url: Optional[str] = None
+    badge_pdf_url: Optional[str] = None
+    badge_number: str
+    issued_at: datetime
+    expires_at: datetime
+    is_revoked: bool
+
+    model_config = {"from_attributes": True}
+
+
+# --- Verification ---
+class VerifyResponse(BaseModel):
+    valid: bool
+    status: str  # valid, invalid, expired, revoked
+    full_name: Optional[str] = None
+    organization: Optional[str] = None
+    designation: Optional[str] = None
+    media_type: Optional[str] = None
+    face_photo_url: Optional[str] = None
+    badge_number: Optional[str] = None
+    message: str
+
+
+# --- Stats ---
+class DashboardStats(BaseModel):
+    total_registered: int
+    pending: int
+    approved: int
+    rejected: int
+    flagged_face_match: int
+    credentials_issued: int
+
+
+# --- Upload ---
+class PresignResponse(BaseModel):
+    upload_url: str
+    file_url: str
+    file_key: str
