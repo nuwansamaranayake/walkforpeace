@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
-from app.database import init_db, close_db, async_session
+from app.database import init_db, close_db, async_session, clear_all_records
 from app.services.auth import seed_admin
 
 logging.basicConfig(
@@ -26,6 +26,9 @@ async def lifespan(app: FastAPI):
     # Create tables
     await init_db()
     logger.info("Database tables created/verified")
+
+    # One-time cleanup: clear all test records
+    await clear_all_records()
 
     # Seed admin
     async with async_session() as db:

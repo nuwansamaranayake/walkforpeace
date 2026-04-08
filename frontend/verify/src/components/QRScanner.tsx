@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { Html5Qrcode } from 'html5-qrcode'
 
 interface QRScannerProps {
@@ -11,12 +11,28 @@ export default function QRScanner({ onScan, scanning }: QRScannerProps) {
   const mountedRef = useRef(false)
   const [error, setError] = useState('')
   const [starting, setStarting] = useState(false)
+  const [zoom, setZoom] = useState(1)
+  const [maxZoom, setMaxZoom] = useState(1)
+  const [hasZoom, setHasZoom] = useState(false)
+  const trackRef = useRef<MediaStreamTrack | null>(null)
+
+  const applyZoom = useCallback(async (value: number) => {
+    const track = trackRef.current
+    if (!track) return
+    try {
+      await (track as any).applyConstraints({ advanced: [{ zoom: value }] })
+      setZoom(value)
+    } catch {
+      // zoom not supported
+    }
+  }, [])
 
   useEffect(() => {
     if (!scanning) {
       if (scannerRef.current?.isScanning) {
         scannerRef.current.stop().catch(() => {})
       }
+      trackRef.current = null
       mountedRef.current = false
       return
     }
@@ -36,7 +52,26 @@ export default function QRScanner({ onScan, scanning }: QRScannerProps) {
         (decodedText) => onScan(decodedText),
         () => {},
       )
-      .then(() => setStarting(false))
+      .then(() => {
+        setStarting(false)
+        // Check for zoom capability
+        try {
+          const videoElem = document.querySelector('#qr-reader video') as HTMLVideoElement
+          if (videoElem?.srcObject) {
+            const stream = videoElem.srcObject as MediaStream
+            const track = stream.getVideoTracks()[0]
+            trackRef.current = track
+            const caps = track.getCapabilities() as any
+            if (caps?.zoom) {
+              setHasZoom(true)
+              setMaxZoom(caps.zoom.max || 5)
+              setZoom(caps.zoom.min || 1)
+            }
+          }
+        } catch {
+          // zoom detection failed, no-op
+        }
+      })
       .catch((err: Error) => {
         setStarting(false)
         if (err.message?.includes('Permission')) {
@@ -50,6 +85,7 @@ export default function QRScanner({ onScan, scanning }: QRScannerProps) {
       if (scannerRef.current?.isScanning) {
         scannerRef.current.stop().catch(() => {})
       }
+      trackRef.current = null
       mountedRef.current = false
     }
   }, [scanning, onScan])
@@ -92,6 +128,34 @@ export default function QRScanner({ onScan, scanning }: QRScannerProps) {
           >
             Reload
           </button>
+        </div>
+      )}
+      {/* Zoom slider */}
+      {hasZoom && !starting && !error && (
+        <div className="flex items-center gap-3 px-4 py-3 bg-navy/90 rounded-b-xl">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF"
+            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            <line x1="8" y1="11" x2="14" y2="11" />
+          </svg>
+          <input
+            type="range"
+            min="1"
+            max={maxZoom}
+            step="0.1"
+            value={zoom}
+            onChange={(e) => applyZoom(parseFloat(e.target.value))}
+            className="flex-1 h-1.5 bg-gray-600 rounded-full appearance-none cursor-pointer accent-saffron"
+          />
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#E8930A"
+            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            <line x1="11" y1="8" x2="11" y2="14" />
+            <line x1="8" y1="11" x2="14" y2="11" />
+          </svg>
+          <span className="text-gray-400 text-xs font-mono w-8 text-right">{zoom.toFixed(1)}x</span>
         </div>
       )}
     </div>

@@ -42,5 +42,14 @@ async def init_db():
             pass  # Already nullable or column doesn't exist
 
 
+async def clear_all_records():
+    """Delete all application, credential, and verification records."""
+    async with engine.begin() as conn:
+        await conn.execute(text("DELETE FROM verification_logs"))
+        await conn.execute(text("DELETE FROM credentials"))
+        await conn.execute(text("DELETE FROM media_applications"))
+        logger.info("Cleared all application/credential records")
+
+
 async def close_db():
     await engine.dispose()
