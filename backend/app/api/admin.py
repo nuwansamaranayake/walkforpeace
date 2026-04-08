@@ -18,17 +18,22 @@ from app.models.models import (
     Credential,
     MediaApplication,
     MediaType,
+    VerificationLog,
 )
 from app.schemas.schemas import (
     ApplicationDetail,
     ApplicationListItem,
     ApplicationListResponse,
+    BatchApproveRequest,
+    BatchApproveResponse,
     ChangePasswordRequest,
     CredentialInfo,
     DashboardStats,
     LoginRequest,
     LoginResponse,
     ReviewRequest,
+    VerificationLogItem,
+    VerificationLogResponse,
 )
 from app.services.auth import (
     authenticate_user,
@@ -161,6 +166,8 @@ async def list_applications(
                 email=app.email,
                 media_type=app.media_type.value,
                 status=app.status.value,
+                pin_code=app.pin_code,
+                id_number=app.id_number,
                 face_match_score=app.face_match_score,
                 face_match_flagged=app.face_match_flagged,
                 created_at=app.created_at,
@@ -199,6 +206,7 @@ async def get_application(
             issued_at=app.credential.issued_at,
             expires_at=app.credential.expires_at,
             is_revoked=app.credential.is_revoked,
+            verification_status=app.credential.verification_status,
         )
 
     return ApplicationDetail(
@@ -212,6 +220,10 @@ async def get_application(
         country=app.country,
         media_type=app.media_type.value,
         status=app.status.value,
+        id_number=app.id_number,
+        id_type=app.id_type,
+        ocr_extracted_name=app.ocr_extracted_name,
+        ocr_extracted_id=app.ocr_extracted_id,
         id_document_url=app.id_document_url,
         id_face_crop_url=app.id_face_crop_url,
         face_photo_url=app.face_photo_url,
@@ -252,86 +264,75 @@ async def review_application(
     if body.action == "approve":
         app.status = ApplicationStatus.APPROVED
 
-        # Generate credential
-        event_date = datetime.strptime(settings.EVENT_DATE, "%Y-%m-%d").replace(
-            tzinfo=timezone.utc
+        # Credential already exists from registration — update its verification_status
+        result2 = await db.execute(
+            select(Credential).where(Credential.application_id == app.id)
         )
-        expires_at = event_date + timedelta(
-            days=settings.CREDENTIAL_EXPIRE_DAYS_AFTER_EVENT
-        )
+        cred = result2.scalar_one_or_none()
+        if not cred:
+            raise HTTPException(500, "Credential missing — should have been created at registration")
 
-        cred_id = uuid.uuid4()
-        badge_number = f"WFP-{str(cred_id.hex[:6]).upper()}"
-        credential_token = create_credential_token(str(cred_id), expires_at)
+        cred.verification_status = "approved"
 
-        # Generate QR code
-        qr_bytes = generate_qr_code(credential_token)
-        qr_key = generate_file_key("qr-codes", f"{badge_number}.png")
-        qr_url = await upload_file(qr_bytes, qr_key, "image/png")
+        # Generate badge PDF if not already generated
+        if not cred.badge_pdf_url:
+            try:
+                import httpx
+                from pathlib import Path
 
-        # Generate badge PDF — need face photo bytes
-        # Fetch face photo from storage
-        try:
-            import httpx, aiofiles
-            from pathlib import Path
+                face_bytes = b""
+                if app.face_photo_url.startswith("/uploads/"):
+                    local_path = Path(settings.UPLOAD_DIR) / app.face_photo_url.replace("/uploads/", "")
+                    if local_path.exists():
+                        with open(local_path, "rb") as f:
+                            face_bytes = f.read()
+                elif app.face_photo_url.startswith("http"):
+                    async with httpx.AsyncClient() as hclient:
+                        resp = await hclient.get(app.face_photo_url)
+                        face_bytes = resp.content
 
-            face_bytes = b""
-            if app.face_photo_url.startswith("/uploads/"):
-                local_path = Path(settings.UPLOAD_DIR) / app.face_photo_url.replace(
-                    "/uploads/", ""
+                qr_bytes = generate_qr_code(cred.credential_token)
+                badge_bytes = generate_badge_pdf(
+                    full_name=app.full_name,
+                    organization=app.organization,
+                    designation=app.designation,
+                    media_type=app.media_type.value,
+                    badge_number=cred.badge_number,
+                    face_photo_bytes=face_bytes,
+                    qr_code_bytes=qr_bytes,
                 )
-                if local_path.exists():
-                    with open(local_path, "rb") as f:
-                        face_bytes = f.read()
-            elif app.face_photo_url.startswith("http"):
-                async with httpx.AsyncClient() as client:
-                    resp = await client.get(app.face_photo_url)
-                    face_bytes = resp.content
-
-            badge_bytes = generate_badge_pdf(
-                full_name=app.full_name,
-                organization=app.organization,
-                designation=app.designation,
-                media_type=app.media_type.value,
-                badge_number=badge_number,
-                face_photo_bytes=face_bytes,
-                qr_code_bytes=qr_bytes,
-            )
-            badge_key = generate_file_key("badges", f"{badge_number}.pdf")
-            badge_url = await upload_file(badge_bytes, badge_key, "application/pdf")
-        except Exception as e:
-            logger.error(f"Badge generation failed: {e}")
-            badge_url = None
-            badge_bytes = b""
-
-        credential = Credential(
-            id=cred_id,
-            application_id=app.id,
-            credential_token=credential_token,
-            qr_code_url=qr_url,
-            badge_pdf_url=badge_url,
-            badge_number=badge_number,
-            expires_at=expires_at,
-        )
-        db.add(credential)
-        await db.flush()
+                badge_key = generate_file_key("badges", f"{cred.badge_number}.pdf")
+                cred.badge_pdf_url = await upload_file(badge_bytes, badge_key, "application/pdf")
+            except Exception as e:
+                logger.error(f"Badge generation failed: {e}")
 
         # Send credential email
         try:
             send_credential_email(
-                app.email, app.full_name, badge_number, qr_bytes, badge_bytes
+                app.email, app.full_name, cred.badge_number,
+                qr_bytes if 'qr_bytes' in dir() else b"",
+                badge_bytes if 'badge_bytes' in dir() else b"",
             )
         except Exception as e:
             logger.error(f"Failed to send credential email: {e}")
 
+        await db.flush()
         return {
             "message": "Application approved",
-            "badge_number": badge_number,
-            "credential_token": credential_token,
+            "badge_number": cred.badge_number,
+            "credential_token": cred.credential_token,
         }
 
     elif body.action == "reject":
         app.status = ApplicationStatus.REJECTED
+
+        result2 = await db.execute(
+            select(Credential).where(Credential.application_id == app.id)
+        )
+        cred = result2.scalar_one_or_none()
+        if cred:
+            cred.verification_status = "rejected"
+
         await db.flush()
 
         try:
@@ -357,8 +358,123 @@ async def revoke_credential(
     if not cred:
         raise HTTPException(404, "Credential not found")
     cred.is_revoked = True
+    cred.verification_status = "revoked"
     await db.flush()
     return {"message": "Credential revoked"}
+
+
+@router.post("/applications/batch-approve", response_model=BatchApproveResponse)
+async def batch_approve(
+    body: BatchApproveRequest,
+    admin: AdminUser = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Approve multiple pending applications at once."""
+    approved_count = 0
+    now = datetime.now(timezone.utc)
+
+    for app_id_str in body.application_ids:
+        try:
+            app_id = uuid.UUID(app_id_str)
+        except ValueError:
+            continue
+
+        result = await db.execute(
+            select(MediaApplication).where(MediaApplication.id == app_id)
+        )
+        app = result.scalar_one_or_none()
+        if not app or app.status != ApplicationStatus.PENDING:
+            continue
+
+        app.status = ApplicationStatus.APPROVED
+        app.reviewed_by = admin.id
+        app.reviewed_at = now
+        app.updated_at = now
+
+        cred_result = await db.execute(
+            select(Credential).where(Credential.application_id == app.id)
+        )
+        cred = cred_result.scalar_one_or_none()
+        if cred:
+            cred.verification_status = "approved"
+
+        approved_count += 1
+
+    await db.flush()
+    return BatchApproveResponse(
+        approved_count=approved_count,
+        message=f"Approved {approved_count} application(s)",
+    )
+
+
+@router.get("/verification-logs", response_model=VerificationLogResponse)
+async def list_verification_logs(
+    credential_id: Optional[str] = Query(None),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    admin: AdminUser = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """List verification scan logs with optional filters."""
+    query = select(VerificationLog).options(
+        selectinload(VerificationLog.credential).selectinload(Credential.application)
+    )
+    count_query = select(func.count(VerificationLog.id))
+
+    if credential_id:
+        try:
+            cid = uuid.UUID(credential_id)
+            query = query.where(VerificationLog.credential_id == cid)
+            count_query = count_query.where(VerificationLog.credential_id == cid)
+        except ValueError:
+            raise HTTPException(400, "Invalid credential_id format")
+
+    if date_from:
+        try:
+            dt_from = datetime.fromisoformat(date_from)
+            query = query.where(VerificationLog.scanned_at >= dt_from)
+            count_query = count_query.where(VerificationLog.scanned_at >= dt_from)
+        except ValueError:
+            raise HTTPException(400, "Invalid date_from format (use ISO 8601)")
+
+    if date_to:
+        try:
+            dt_to = datetime.fromisoformat(date_to)
+            query = query.where(VerificationLog.scanned_at <= dt_to)
+            count_query = count_query.where(VerificationLog.scanned_at <= dt_to)
+        except ValueError:
+            raise HTTPException(400, "Invalid date_to format (use ISO 8601)")
+
+    total = (await db.execute(count_query)).scalar() or 0
+
+    query = (
+        query.order_by(VerificationLog.scanned_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    result = await db.execute(query)
+    logs = result.scalars().all()
+
+    items = []
+    for log in logs:
+        cred = log.credential
+        app_obj = cred.application if cred else None
+        items.append(VerificationLogItem(
+            id=log.id,
+            credential_id=log.credential_id,
+            badge_number=cred.badge_number if cred else None,
+            full_name=app_obj.full_name if app_obj else None,
+            scanned_at=log.scanned_at,
+            scanned_by_ip=log.scanned_by_ip,
+            result=log.result.value,
+            verified_by_action=log.verified_by_action,
+        ))
+
+    return VerificationLogResponse(
+        items=items, total=total, page=page, page_size=page_size,
+    )
 
 
 @router.get("/stats", response_model=DashboardStats)
