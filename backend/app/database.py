@@ -41,6 +41,32 @@ async def init_db():
         except Exception:
             pass  # Already nullable or column doesn't exist
 
+    # v3: Add GPS + device columns to verification_logs
+    async with engine.begin() as conn:
+        migrations = [
+            # verification_logs — GPS tracking
+            "ALTER TABLE verification_logs ADD COLUMN IF NOT EXISTS latitude FLOAT",
+            "ALTER TABLE verification_logs ADD COLUMN IF NOT EXISTS longitude FLOAT",
+            "ALTER TABLE verification_logs ADD COLUMN IF NOT EXISTS place_name VARCHAR(200)",
+            "ALTER TABLE verification_logs ADD COLUMN IF NOT EXISTS device_id VARCHAR(100)",
+            "ALTER TABLE verification_logs ADD COLUMN IF NOT EXISTS verify_session_id UUID",
+            # verify_sessions — logout flag
+            "ALTER TABLE verify_sessions ADD COLUMN IF NOT EXISTS is_expired BOOLEAN NOT NULL DEFAULT false",
+            # verify_sessions — device info + scan tracking
+            "ALTER TABLE verify_sessions ADD COLUMN IF NOT EXISTS device_info VARCHAR(500)",
+            "ALTER TABLE verify_sessions ADD COLUMN IF NOT EXISTS device_name VARCHAR(100)",
+            "ALTER TABLE verify_sessions ADD COLUMN IF NOT EXISTS screen_size VARCHAR(20)",
+            "ALTER TABLE verify_sessions ADD COLUMN IF NOT EXISTS total_scans INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE verify_sessions ADD COLUMN IF NOT EXISTS last_scan_at TIMESTAMPTZ",
+            "ALTER TABLE verify_sessions ADD COLUMN IF NOT EXISTS last_location VARCHAR(200)",
+        ]
+        for sql in migrations:
+            try:
+                await conn.execute(text(sql))
+            except Exception as e:
+                logger.debug(f"Migration skipped (likely already applied): {e}")
+        logger.info("v3 schema migrations applied")
+
 
 async def clear_all_records():
     """Delete all application, credential, and verification records."""
