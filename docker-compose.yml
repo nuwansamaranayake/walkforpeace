@@ -46,7 +46,6 @@ services:
       SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-noreply@walkforpeacelk.org}
       ADMIN_DEFAULT_USERNAME: ${ADMIN_DEFAULT_USERNAME:-admin}
       ADMIN_DEFAULT_PASSWORD: ${ADMIN_DEFAULT_PASSWORD}
-      FACE_MATCH_THRESHOLD: "0.60"
       VERIFY_PASSWORD: ${VERIFY_PASSWORD}
       VERIFY_SESSION_HOURS: ${VERIFY_SESSION_HOURS:-24}
       CORS_ORIGINS: https://register.walkforpeacelk.org,https://verify.walkforpeacelk.org,https://admin.walkforpeacelk.org
