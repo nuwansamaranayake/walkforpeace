@@ -4,6 +4,7 @@ import type {
   VerifyAuthResponse, VerifyResponse, LoginResponse, DashboardStats,
   ApplicationListItem, ApplicationDetail, PaginatedResponse,
   BatchApproveResponse, VerificationLogItem, ScanLogItem, GatekeeperInfo,
+  ScanActivityItem,
 } from './types'
 
 function createApi(baseURL = '/api'): AxiosInstance {
@@ -152,6 +153,11 @@ export async function getApplicationScans(appId: string) {
 
 export async function getGatekeepers() {
   const { data } = await api.get<GatekeeperInfo[]>('/admin/gatekeepers')
+  return data
+}
+
+export async function getScanActivity(params: Record<string, any> = {}) {
+  const { data } = await api.get<PaginatedResponse<ScanActivityItem>>('/admin/scan-activity', { params })
   return data
 }
 

@@ -34,6 +34,7 @@ from app.schemas.schemas import (
     LoginRequest,
     LoginResponse,
     ReviewRequest,
+    ScanActivityItem,
     ScanLogItem,
     VerificationLogItem,
     VerificationLogResponse,
@@ -534,8 +535,8 @@ async def list_gatekeepers(
         .where(VerifySession.is_expired == False)
         .where(VerifySession.expires_at > now)
         .where(
-            # Only show sessions that have scanned or were created recently
-            (VerifySession.total_scans > 0) | (VerifySession.created_at > twenty_four_hours_ago)
+            # Only show sessions that have scanned OR have device info (v3+)
+            (VerifySession.total_scans > 0) | (VerifySession.device_name.isnot(None))
         )
         .order_by(VerifySession.last_scan_at.desc().nullslast())
         .limit(50)
@@ -556,6 +557,52 @@ async def list_gatekeepers(
         )
         for s in sessions
     ]
+
+
+@router.get("/scan-activity")
+async def list_scan_activity(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    admin: AdminUser = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Global scan activity feed for dashboard."""
+    # Count total
+    total = (
+        await db.execute(select(func.count(VerificationLog.id)))
+    ).scalar() or 0
+
+    # Fetch logs with credential -> application join
+    result = await db.execute(
+        select(VerificationLog)
+        .options(selectinload(VerificationLog.credential).selectinload(Credential.application))
+        .order_by(VerificationLog.scanned_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    logs = result.scalars().all()
+
+    items = []
+    for log in logs:
+        full_name = None
+        badge_number = None
+        if log.credential:
+            badge_number = log.credential.badge_number
+            if log.credential.application:
+                full_name = log.credential.application.full_name
+        items.append(ScanActivityItem(
+            id=log.id,
+            scanned_at=log.scanned_at,
+            full_name=full_name,
+            badge_number=badge_number,
+            result=log.result.value,
+            verified_by_action=log.verified_by_action,
+            place_name=log.place_name,
+            device_id=log.device_id,
+            scanned_by_ip=log.scanned_by_ip,
+        ))
+
+    return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 
 @router.get("/stats", response_model=DashboardStats)

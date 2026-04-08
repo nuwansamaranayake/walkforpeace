@@ -261,6 +261,21 @@ class ScanLogItem(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# --- Global Scan Activity (dashboard tab) ---
+class ScanActivityItem(BaseModel):
+    id: UUID
+    scanned_at: datetime
+    full_name: Optional[str] = None
+    badge_number: Optional[str] = None
+    result: str
+    verified_by_action: Optional[str] = None
+    place_name: Optional[str] = None
+    device_id: Optional[str] = None
+    scanned_by_ip: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
 # --- Verify Auth with device info (Task 4) ---
 class VerifyAuthRequestV2(BaseModel):
     password: str

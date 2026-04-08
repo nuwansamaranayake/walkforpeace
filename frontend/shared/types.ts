@@ -170,6 +170,19 @@ export interface ScanLogItem {
   device_id: string | null
 }
 
+// Global scan activity (dashboard tab)
+export interface ScanActivityItem {
+  id: string
+  scanned_at: string
+  full_name: string
+  badge_number: string | null
+  result: string
+  verified_by_action: string | null
+  place_name: string | null
+  device_id: string | null
+  scanned_by_ip: string | null
+}
+
 // Gatekeeper info (Task 4)
 export interface GatekeeperInfo {
   id: string
