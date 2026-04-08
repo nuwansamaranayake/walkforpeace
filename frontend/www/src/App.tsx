@@ -1,27 +1,20 @@
 function App() {
   return (
-    <div className="min-h-screen bg-navy flex flex-col items-center justify-between px-4 py-12">
-      {/* Hero Section */}
-      <div className="flex-1 flex flex-col items-center justify-center text-center max-w-2xl mx-auto">
+    <div className="min-h-screen bg-navy flex flex-col">
+      {/* Hero Image Section */}
+      <div className="relative w-full">
         <img
-          src="/logo.png?v=2"
-          alt="Walk for Peace Dove Logo"
-          className="w-48 h-48 md:w-52 md:h-52 object-contain mb-8"
+          src="/hero.png"
+          alt="Walk for Peace — Buddhist monks walking for peace through the Sri Lankan countryside"
+          className="w-full h-auto object-cover"
         />
+        {/* Gradient overlay at bottom for smooth transition */}
+        <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-navy to-transparent" />
+      </div>
 
-        <h1 className="text-4xl md:text-6xl font-bold text-white mb-3">
-          Walk for Peace
-        </h1>
-
-        <h2 className="text-2xl md:text-3xl font-semibold text-gold mb-4">
-          Sri Lanka 2026
-        </h2>
-
-        <p className="text-xl md:text-2xl text-saffron font-medium mb-4">
-          April 21, 2026
-        </p>
-
-        <p className="text-lg text-gray-300 italic mb-8">
+      {/* Content Section */}
+      <div className="flex-1 flex flex-col items-center text-center px-4 -mt-8 relative z-10">
+        <p className="text-lg md:text-xl text-gray-300 italic mb-6">
           "Today Is My Peaceful Day"
         </p>
 
@@ -64,7 +57,7 @@ function App() {
       </div>
 
       {/* Footer */}
-      <footer className="w-full max-w-2xl mx-auto mt-16 text-center">
+      <footer className="w-full max-w-2xl mx-auto mt-12 mb-6 text-center px-4">
         <p className="text-gray-400 text-sm mb-1">
           Led by Venerable Bhikkhu Paññākāra
         </p>
