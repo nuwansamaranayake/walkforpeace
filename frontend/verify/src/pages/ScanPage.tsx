@@ -1,6 +1,6 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { verifyCredential } from '@walkforpeace/shared'
+import { verifyCredential, verifyLogout } from '@walkforpeace/shared'
 import type { VerifyResponse } from '@walkforpeace/shared'
 import QRScanner from '../components/QRScanner'
 import ResultApproved from '../components/ResultApproved'
@@ -9,15 +9,70 @@ import ResultRejected from '../components/ResultRejected'
 
 type PageState = 'scanning' | 'loading' | 'result'
 
+const TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes
+const WARNING_MS = 4 * 60 * 1000 // 4 minutes — show warning at this point
+
 function extractToken(decodedText: string): string {
-  // Try to extract from URL: /api/verify/<token>
   const urlMatch = decodedText.match(/\/api\/verify\/(.+)$/)
   if (urlMatch) return urlMatch[1].trim()
-  // Also try path-only pattern: /verify/<token>
   const pathMatch = decodedText.match(/\/verify\/(.+)$/)
   if (pathMatch) return pathMatch[1].trim()
-  // Otherwise treat the whole string as the token
   return decodedText.trim()
+}
+
+function parseDeviceName(ua: string): string {
+  // Try to extract device model from user agent
+  const mobile = ua.match(/\(([^)]+)\)/)
+  if (mobile) {
+    const parts = mobile[1]
+    // Android: "Linux; Android 12; SM-A127F"
+    const android = parts.match(/;\s*(SM-[A-Z0-9]+|Pixel\s*\w+|Redmi\s*[^\s;]+|SAMSUNG\s*[^\s;]+|Xiaomi\s*[^\s;]+|OPPO\s*[^\s;]+|vivo\s*[^\s;]+|OnePlus\s*[^\s;]+|Huawei\s*[^\s;]+)/i)
+    if (android) return android[1].trim()
+    // iOS
+    if (parts.includes('iPhone')) return 'iPhone'
+    if (parts.includes('iPad')) return 'iPad'
+  }
+  // Desktop
+  if (ua.includes('Windows')) return 'Windows PC'
+  if (ua.includes('Mac')) return 'Mac'
+  if (ua.includes('Linux')) return 'Linux PC'
+  return 'Unknown Device'
+}
+
+// GPS helper — returns cached position or null (never blocks)
+let cachedGps: { lat: number; lng: number } | null = null
+let gpsRequested = false
+
+function requestGps() {
+  if (gpsRequested) return
+  gpsRequested = true
+  if ('geolocation' in navigator) {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        cachedGps = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+      },
+      () => { /* GPS denied — that's OK */ },
+      { enableHighAccuracy: true, timeout: 10000 }
+    )
+    // Also watch for updates
+    navigator.geolocation.watchPosition(
+      (pos) => {
+        cachedGps = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+      },
+      () => {},
+      { enableHighAccuracy: false, timeout: 30000 }
+    )
+  }
+}
+
+// Stable device ID for this session
+function getDeviceId(): string {
+  let id = sessionStorage.getItem('wfp_device_id')
+  if (!id) {
+    id = crypto.randomUUID?.() || Math.random().toString(36).slice(2)
+    sessionStorage.setItem('wfp_device_id', id)
+  }
+  return id
 }
 
 export default function ScanPage() {
@@ -26,12 +81,43 @@ export default function ScanPage() {
   const [result, setResult] = useState<VerifyResponse | null>(null)
   const [currentToken, setCurrentToken] = useState('')
   const [scanError, setScanError] = useState('')
-  // Prevent duplicate scans of same QR within a session
   const [lastScanned, setLastScanned] = useState('')
+  const [showTimeoutWarning, setShowTimeoutWarning] = useState(false)
+  const lastActivityRef = useRef(Date.now())
 
+  // Request GPS on mount
+  useEffect(() => { requestGps() }, [])
+
+  // Session check
   useEffect(() => {
     if (!localStorage.getItem('verify_session')) {
       navigate('/', { replace: true })
+    }
+  }, [navigate])
+
+  // Inactivity auto-logout (Task 3)
+  useEffect(() => {
+    const resetActivity = () => {
+      lastActivityRef.current = Date.now()
+      setShowTimeoutWarning(false)
+    }
+
+    const events = ['touchstart', 'click', 'scroll', 'keydown']
+    events.forEach(e => document.addEventListener(e, resetActivity))
+
+    const interval = setInterval(() => {
+      const elapsed = Date.now() - lastActivityRef.current
+      if (elapsed > TIMEOUT_MS) {
+        verifyLogout()
+        navigate('/', { replace: true })
+      } else if (elapsed > WARNING_MS) {
+        setShowTimeoutWarning(true)
+      }
+    }, 15000) // check every 15s
+
+    return () => {
+      events.forEach(e => document.removeEventListener(e, resetActivity))
+      clearInterval(interval)
     }
   }, [navigate])
 
@@ -46,7 +132,10 @@ export default function ScanPage() {
     setScanError('')
 
     try {
-      const data = await verifyCredential(token)
+      const gps = cachedGps
+        ? { lat: cachedGps.lat, lng: cachedGps.lng, device_id: getDeviceId() }
+        : { device_id: getDeviceId() }
+      const data = await verifyCredential(token, gps)
       setResult(data)
       setPageState('result')
     } catch {
@@ -64,8 +153,8 @@ export default function ScanPage() {
     setPageState('scanning')
   }, [])
 
-  const handleLogout = () => {
-    localStorage.removeItem('verify_session')
+  const handleLogout = async () => {
+    await verifyLogout()
     navigate('/', { replace: true })
   }
 
@@ -87,12 +176,18 @@ export default function ScanPage() {
         </button>
       </header>
 
+      {/* Timeout warning toast */}
+      {showTimeoutWarning && (
+        <div className="bg-amber-600 text-white text-center text-sm py-2 px-4">
+          Session expires in 1 minute — tap anywhere to stay active
+        </div>
+      )}
+
       <main className="flex-1 flex flex-col px-4 py-5 gap-5 max-w-lg mx-auto w-full">
         {/* Scanner area */}
         {pageState !== 'result' && (
           <div className="bg-navy-light rounded-xl border border-white/10 overflow-hidden">
             <div className="px-4 pt-4 pb-2 flex items-center gap-2">
-              {/* Scan icon */}
               <svg
                 width="18"
                 height="18"

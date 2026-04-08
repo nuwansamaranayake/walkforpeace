@@ -3,7 +3,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -19,15 +19,57 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["verification"])
 
 
+def _build_log(
+    credential_id,
+    client_ip: str,
+    result: VerificationResult,
+    action: str = None,
+    lat: float = None,
+    lng: float = None,
+    place: str = None,
+    device_id: str = None,
+    session_id=None,
+) -> VerificationLog:
+    """Helper to build a VerificationLog with GPS + device info."""
+    return VerificationLog(
+        credential_id=credential_id,
+        scanned_by_ip=client_ip,
+        result=result,
+        verified_by_action=action,
+        latitude=lat,
+        longitude=lng,
+        place_name=place,
+        device_id=device_id,
+        verify_session_id=session_id,
+    )
+
+
+async def _update_session_scan_stats(
+    db: AsyncSession, session: Optional[VerifySession], place: str = None
+):
+    """Update gatekeeper session scan counter and last activity."""
+    if not session:
+        return
+    session.total_scans = (session.total_scans or 0) + 1
+    session.last_scan_at = datetime.now(timezone.utc)
+    if place:
+        session.last_location = place
+
+
 @router.get("/verify/{credential_token}", response_model=VerifyResponseV2)
 async def verify_credential(
     credential_token: str,
     request: Request,
+    lat: Optional[float] = Query(None),
+    lng: Optional[float] = Query(None),
+    place: Optional[str] = Query(None),
+    device_id: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
     session: Optional[VerifySession] = Depends(get_verify_session),
 ):
     """Verify a media credential. Response depth depends on verify session."""
     client_ip = request.client.host if request.client else "unknown"
+    session_id = session.id if session else None
 
     payload = decode_credential_token(credential_token)
 
@@ -43,10 +85,11 @@ async def verify_credential(
         )
         cred = result.scalar_one_or_none()
         if cred:
-            db.add(VerificationLog(
-                credential_id=cred.id, scanned_by_ip=client_ip,
-                result=VerificationResult.EXPIRED,
+            db.add(_build_log(
+                cred.id, client_ip, VerificationResult.EXPIRED,
+                lat=lat, lng=lng, place=place, device_id=device_id, session_id=session_id,
             ))
+            await _update_session_scan_stats(db, session, place)
             await db.flush()
         return VerifyResponseV2(
             valid=False, status="expired",
@@ -77,10 +120,11 @@ async def verify_credential(
     vs = cred.verification_status
 
     if vs == "revoked" or cred.is_revoked:
-        db.add(VerificationLog(
-            credential_id=cred.id, scanned_by_ip=client_ip,
-            result=VerificationResult.REVOKED,
+        db.add(_build_log(
+            cred.id, client_ip, VerificationResult.REVOKED,
+            lat=lat, lng=lng, place=place, device_id=device_id, session_id=session_id,
         ))
+        await _update_session_scan_stats(db, session, place)
         await db.flush()
         return VerifyResponseV2(
             valid=False, status="revoked",
@@ -89,10 +133,11 @@ async def verify_credential(
 
     now = datetime.now(timezone.utc)
     if cred.expires_at and cred.expires_at < now:
-        db.add(VerificationLog(
-            credential_id=cred.id, scanned_by_ip=client_ip,
-            result=VerificationResult.EXPIRED,
+        db.add(_build_log(
+            cred.id, client_ip, VerificationResult.EXPIRED,
+            lat=lat, lng=lng, place=place, device_id=device_id, session_id=session_id,
         ))
+        await _update_session_scan_stats(db, session, place)
         await db.flush()
         return VerifyResponseV2(
             valid=False, status="expired",
@@ -104,10 +149,11 @@ async def verify_credential(
     else:
         log_result = VerificationResult.VALID
 
-    db.add(VerificationLog(
-        credential_id=cred.id, scanned_by_ip=client_ip,
-        result=log_result,
+    db.add(_build_log(
+        cred.id, client_ip, log_result,
+        lat=lat, lng=lng, place=place, device_id=device_id, session_id=session_id,
     ))
+    await _update_session_scan_stats(db, session, place)
     await db.flush()
 
     messages = {
@@ -143,6 +189,10 @@ async def verify_credential(
 async def gate_approve(
     credential_token: str,
     request: Request,
+    lat: Optional[float] = Query(None),
+    lng: Optional[float] = Query(None),
+    place: Optional[str] = Query(None),
+    device_id: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
     session: VerifySession = Depends(require_verify_session),
 ):
@@ -164,11 +214,12 @@ async def gate_approve(
         raise HTTPException(400, f"Cannot gate-approve — status is '{cred.verification_status}', not 'flagged'")
 
     cred.verification_status = "approved"
-    db.add(VerificationLog(
-        credential_id=cred.id, scanned_by_ip=client_ip,
-        result=VerificationResult.VALID,
-        verified_by_action="gate_approved",
+    db.add(_build_log(
+        cred.id, client_ip, VerificationResult.VALID,
+        action="gate_approved", lat=lat, lng=lng, place=place,
+        device_id=device_id, session_id=session.id,
     ))
+    await _update_session_scan_stats(db, session, place)
     await db.flush()
 
     logger.info(f"Gate-approved: {cred.badge_number} by {client_ip}")
@@ -179,6 +230,10 @@ async def gate_approve(
 async def gate_deny(
     credential_token: str,
     request: Request,
+    lat: Optional[float] = Query(None),
+    lng: Optional[float] = Query(None),
+    place: Optional[str] = Query(None),
+    device_id: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
     session: VerifySession = Depends(require_verify_session),
 ):
@@ -196,11 +251,12 @@ async def gate_deny(
     if not cred:
         raise HTTPException(404, "Credential not found")
 
-    db.add(VerificationLog(
-        credential_id=cred.id, scanned_by_ip=client_ip,
-        result=VerificationResult.INVALID,
-        verified_by_action="gate_denied",
+    db.add(_build_log(
+        cred.id, client_ip, VerificationResult.INVALID,
+        action="gate_denied", lat=lat, lng=lng, place=place,
+        device_id=device_id, session_id=session.id,
     ))
+    await _update_session_scan_stats(db, session, place)
     await db.flush()
 
     logger.info(f"Gate-denied: {cred.badge_number} by {client_ip}")

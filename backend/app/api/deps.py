@@ -53,6 +53,8 @@ async def get_verify_session(
         return None
     if session.expires_at < datetime.now(timezone.utc):
         return None
+    if getattr(session, 'is_expired', False):
+        return None
     return session
 
 
@@ -70,4 +72,6 @@ async def require_verify_session(
         raise HTTPException(status_code=401, detail="Invalid verify session")
     if session.expires_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=401, detail="Verify session expired")
+    if getattr(session, 'is_expired', False):
+        raise HTTPException(status_code=401, detail="Session has been logged out")
     return session

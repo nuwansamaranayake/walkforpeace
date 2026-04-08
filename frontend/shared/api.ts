@@ -3,7 +3,7 @@ import type {
   RegisterResponse, StatusResponse, RetrieveResponse,
   VerifyAuthResponse, VerifyResponse, LoginResponse, DashboardStats,
   ApplicationListItem, ApplicationDetail, PaginatedResponse,
-  BatchApproveResponse, VerificationLogItem,
+  BatchApproveResponse, VerificationLogItem, ScanLogItem, GatekeeperInfo,
 } from './types'
 
 function createApi(baseURL = '/api'): AxiosInstance {
@@ -52,25 +52,52 @@ export async function retrieveByIDNumber(idNumber: string) {
 }
 
 // --- Verify Auth ---
-export async function verifyAuth(password: string) {
-  const { data } = await api.post<VerifyAuthResponse>('/verify/auth', { password })
+export async function verifyAuth(password: string, deviceInfo?: { device_info?: string; device_name?: string; screen_size?: string }) {
+  const { data } = await api.post<VerifyAuthResponse>('/verify/auth', {
+    password,
+    ...deviceInfo,
+  })
   localStorage.setItem('verify_session', data.session_token)
   return data
 }
 
+export async function verifyLogout() {
+  try {
+    await api.post('/verify/logout')
+  } catch {
+    // Ignore errors — session may already be expired
+  }
+  localStorage.removeItem('verify_session')
+}
+
 // --- Verification ---
-export async function verifyCredential(token: string) {
-  const { data } = await api.get<VerifyResponse>(`/verify/${token}`)
+export async function verifyCredential(token: string, gps?: { lat?: number; lng?: number; place?: string; device_id?: string }) {
+  const params: Record<string, any> = {}
+  if (gps?.lat != null) params.lat = gps.lat
+  if (gps?.lng != null) params.lng = gps.lng
+  if (gps?.place) params.place = gps.place
+  if (gps?.device_id) params.device_id = gps.device_id
+  const { data } = await api.get<VerifyResponse>(`/verify/${token}`, { params })
   return data
 }
 
-export async function gateApprove(token: string) {
-  const { data } = await api.post<{ message: string; badge_number: string }>(`/verify/${token}/gate-approve`)
+export async function gateApprove(token: string, gps?: { lat?: number; lng?: number; place?: string; device_id?: string }) {
+  const params: Record<string, any> = {}
+  if (gps?.lat != null) params.lat = gps.lat
+  if (gps?.lng != null) params.lng = gps.lng
+  if (gps?.place) params.place = gps.place
+  if (gps?.device_id) params.device_id = gps.device_id
+  const { data } = await api.post<{ message: string; badge_number: string }>(`/verify/${token}/gate-approve`, null, { params })
   return data
 }
 
-export async function gateDeny(token: string) {
-  const { data } = await api.post<{ message: string; badge_number: string }>(`/verify/${token}/gate-deny`)
+export async function gateDeny(token: string, gps?: { lat?: number; lng?: number; place?: string; device_id?: string }) {
+  const params: Record<string, any> = {}
+  if (gps?.lat != null) params.lat = gps.lat
+  if (gps?.lng != null) params.lng = gps.lng
+  if (gps?.place) params.place = gps.place
+  if (gps?.device_id) params.device_id = gps.device_id
+  const { data } = await api.post<{ message: string; badge_number: string }>(`/verify/${token}/gate-deny`, null, { params })
   return data
 }
 
@@ -115,6 +142,16 @@ export async function batchApprove(applicationIds: string[]) {
 
 export async function getVerificationLogs(params: Record<string, any> = {}) {
   const { data } = await api.get<PaginatedResponse<VerificationLogItem>>('/admin/verification-logs', { params })
+  return data
+}
+
+export async function getApplicationScans(appId: string) {
+  const { data } = await api.get<ScanLogItem[]>(`/admin/applications/${appId}/scans`)
+  return data
+}
+
+export async function getGatekeepers() {
+  const { data } = await api.get<GatekeeperInfo[]>('/admin/gatekeepers')
   return data
 }
 

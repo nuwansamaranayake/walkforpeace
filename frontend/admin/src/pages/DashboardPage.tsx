@@ -3,11 +3,12 @@ import { Link, useNavigate } from 'react-router-dom'
 import {
   Users, Clock, CheckCircle, XCircle, AlertTriangle,
   Search, LogOut, ChevronLeft, ChevronRight, ClipboardList,
+  ScanLine, ShieldCheck, Smartphone, MapPin,
 } from 'lucide-react'
 import {
-  getApplications, getStats, batchApprove, StatusBadge,
+  getApplications, getStats, batchApprove, getGatekeepers, StatusBadge,
 } from '@walkforpeace/shared'
-import type { DashboardStats, ApplicationListItem } from '@walkforpeace/shared'
+import type { DashboardStats, ApplicationListItem, GatekeeperInfo } from '@walkforpeace/shared'
 
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
@@ -18,13 +19,14 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [batchLoading, setBatchLoading] = useState(false)
+  const [gatekeepers, setGatekeepers] = useState<GatekeeperInfo[]>([])
   const navigate = useNavigate()
   const pageSize = 15
 
   const fetchData = async () => {
     setLoading(true)
     try {
-      const [statsData, appsData] = await Promise.all([
+      const [statsData, appsData, gkData] = await Promise.all([
         getStats(),
         getApplications({
           page,
@@ -34,11 +36,13 @@ export default function DashboardPage() {
           ...(filters.search && { search: filters.search }),
           ...(filters.flagged && { flagged: filters.flagged === 'true' }),
         }),
+        getGatekeepers().catch(() => []),
       ])
       setStats(statsData)
       setApps(appsData.items)
       setTotal(appsData.total)
       setSelected(new Set())
+      setGatekeepers(gkData)
     } catch (err: any) {
       if (err.response?.status === 401) navigate('/')
     } finally {
@@ -48,6 +52,18 @@ export default function DashboardPage() {
 
   useEffect(() => { fetchData() }, [page, filters])
 
+  // Auto-refresh gatekeepers every 30s
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const [s, gk] = await Promise.all([getStats(), getGatekeepers().catch(() => [])])
+        setStats(s)
+        setGatekeepers(gk)
+      } catch { /* ignore */ }
+    }, 30000)
+    return () => clearInterval(interval)
+  }, [])
+
   const totalPages = Math.ceil(total / pageSize)
 
   const statCards = stats ? [
@@ -55,7 +71,8 @@ export default function DashboardPage() {
     { label: 'Pending', value: stats.pending, icon: Clock, color: 'bg-saffron' },
     { label: 'Approved', value: stats.approved, icon: CheckCircle, color: 'bg-green-500' },
     { label: 'Rejected', value: stats.rejected, icon: XCircle, color: 'bg-red-500' },
-    { label: 'Flagged', value: stats.flagged, icon: AlertTriangle, color: 'bg-yellow-500' },
+    { label: 'Scans Today', value: stats.total_scans_today, icon: ScanLine, color: 'bg-purple-500' },
+    { label: 'Gatekeepers', value: stats.active_gatekeepers, icon: ShieldCheck, color: 'bg-teal-500' },
   ] : []
 
   const toggleSelect = (id: string) => {
@@ -95,6 +112,16 @@ export default function DashboardPage() {
     navigate('/')
   }
 
+  function timeAgo(dateStr: string | null): string {
+    if (!dateStr) return 'Never'
+    const diff = Date.now() - new Date(dateStr).getTime()
+    const mins = Math.floor(diff / 60000)
+    if (mins < 1) return 'Just now'
+    if (mins < 60) return `${mins} min ago`
+    const hrs = Math.floor(mins / 60)
+    return `${hrs}h ago`
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Top bar */}
@@ -121,7 +148,7 @@ export default function DashboardPage() {
 
       <div className="max-w-7xl mx-auto px-4 py-6">
         {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
           {statCards.map(s => (
             <div key={s.label} className={`${s.color} text-white rounded-xl p-4 text-center`}>
               <s.icon className="w-6 h-6 mx-auto mb-1 opacity-80" />
@@ -130,6 +157,61 @@ export default function DashboardPage() {
             </div>
           ))}
         </div>
+
+        {/* Gatekeeper Monitor */}
+        {gatekeepers.length > 0 && (
+          <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
+            <h2 className="font-semibold text-navy mb-3 flex items-center gap-2 text-sm">
+              <ShieldCheck className="w-4 h-4" /> Active Gatekeepers
+            </h2>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead className="bg-gray-50 text-gray-500 uppercase">
+                  <tr>
+                    <th className="px-3 py-2 text-left">Device</th>
+                    <th className="px-3 py-2 text-left">IP</th>
+                    <th className="px-3 py-2 text-left">Location</th>
+                    <th className="px-3 py-2 text-left">Scans</th>
+                    <th className="px-3 py-2 text-left">Last Active</th>
+                    <th className="px-3 py-2 text-left">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {gatekeepers.map(gk => (
+                    <tr key={gk.id}>
+                      <td className="px-3 py-2">
+                        <span className="flex items-center gap-1.5">
+                          <Smartphone className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                          <span className="font-medium">{gk.device_name || 'Unknown'}</span>
+                        </span>
+                        {gk.screen_size && <span className="text-gray-400 ml-5">{gk.screen_size}</span>}
+                      </td>
+                      <td className="px-3 py-2 text-gray-500 font-mono">{gk.device_ip || '—'}</td>
+                      <td className="px-3 py-2">
+                        {gk.last_location ? (
+                          <span className="flex items-center gap-1">
+                            <MapPin className="w-3 h-3 text-gray-400 shrink-0" />
+                            {gk.last_location}
+                          </span>
+                        ) : '—'}
+                      </td>
+                      <td className="px-3 py-2 font-bold">{gk.total_scans}</td>
+                      <td className="px-3 py-2 text-gray-500">{timeAgo(gk.last_scan_at)}</td>
+                      <td className="px-3 py-2">
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                          gk.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                        }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${gk.status === 'active' ? 'bg-green-500' : 'bg-red-500'}`} />
+                          {gk.status === 'active' ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {/* Filters + Batch Approve */}
         <div className="bg-white rounded-xl shadow-sm p-4 mb-6 flex flex-wrap gap-3 items-center">
@@ -166,14 +248,6 @@ export default function DashboardPage() {
             <option value="photographer">Photographer</option>
             <option value="freelance">Freelance</option>
           </select>
-          <select
-            value={filters.flagged}
-            onChange={e => { setFilters(f => ({ ...f, flagged: e.target.value })); setPage(1) }}
-            className="border rounded-lg px-3 py-2 text-sm"
-          >
-            <option value="">All matches</option>
-            <option value="true">Flagged only</option>
-          </select>
           {selected.size > 0 && (
             <button
               onClick={handleBatchApprove}
@@ -206,7 +280,6 @@ export default function DashboardPage() {
                   <th className="px-4 py-3 text-left">Type</th>
                   <th className="px-4 py-3 text-left">PIN</th>
                   <th className="px-4 py-3 text-left">ID Number</th>
-                  <th className="px-4 py-3 text-left">Face Match</th>
                   <th className="px-4 py-3 text-left">Status</th>
                   <th className="px-4 py-3 text-left">Date</th>
                   <th className="px-4 py-3 text-left">Action</th>
@@ -214,9 +287,9 @@ export default function DashboardPage() {
               </thead>
               <tbody className="divide-y">
                 {loading ? (
-                  <tr><td colSpan={11} className="px-4 py-8 text-center text-gray-400">Loading...</td></tr>
+                  <tr><td colSpan={10} className="px-4 py-8 text-center text-gray-400">Loading...</td></tr>
                 ) : apps.length === 0 ? (
-                  <tr><td colSpan={11} className="px-4 py-8 text-center text-gray-400">No applications found</td></tr>
+                  <tr><td colSpan={10} className="px-4 py-8 text-center text-gray-400">No applications found</td></tr>
                 ) : apps.map(app => (
                   <tr key={app.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3">
@@ -238,14 +311,6 @@ export default function DashboardPage() {
                     </td>
                     <td className="px-4 py-3 font-mono text-xs text-gray-500">
                       {app.id_number ?? <span className="text-gray-300">—</span>}
-                    </td>
-                    <td className="px-4 py-3">
-                      {app.face_match_score !== null ? (
-                        <span className={`font-mono text-xs ${app.face_match_flagged ? 'text-red-500 font-bold' : 'text-green-600'}`}>
-                          {(app.face_match_score * 100).toFixed(0)}%
-                          {app.face_match_flagged && <AlertTriangle className="inline w-3 h-3 ml-1" />}
-                        </span>
-                      ) : <span className="text-gray-400 text-xs">N/A</span>}
                     </td>
                     <td className="px-4 py-3">
                       <StatusBadge status={app.status === 'pending_review' ? 'pending' : app.status as any} />

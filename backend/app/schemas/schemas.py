@@ -170,6 +170,8 @@ class DashboardStats(BaseModel):
     rejected: int
     flagged: int
     credentials_issued: int
+    total_scans_today: int = 0
+    active_gatekeepers: int = 0
 
 
 # --- v2: Retrieve ---
@@ -242,6 +244,44 @@ class VerificationLogResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+# --- Scan Log for per-application scan history (Task 2) ---
+class ScanLogItem(BaseModel):
+    id: UUID
+    scanned_at: datetime
+    scanned_by_ip: Optional[str] = None
+    result: str
+    verified_by_action: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    place_name: Optional[str] = None
+    device_id: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+# --- Verify Auth with device info (Task 4) ---
+class VerifyAuthRequestV2(BaseModel):
+    password: str
+    device_info: Optional[str] = None
+    device_name: Optional[str] = None
+    screen_size: Optional[str] = None
+
+
+# --- Gatekeeper info (Task 4) ---
+class GatekeeperInfo(BaseModel):
+    id: UUID
+    device_name: Optional[str] = None
+    device_ip: Optional[str] = None
+    screen_size: Optional[str] = None
+    total_scans: int = 0
+    last_scan_at: Optional[datetime] = None
+    last_location: Optional[str] = None
+    created_at: datetime
+    status: str = "active"  # active | inactive
+
+    model_config = {"from_attributes": True}
 
 
 # --- Upload ---

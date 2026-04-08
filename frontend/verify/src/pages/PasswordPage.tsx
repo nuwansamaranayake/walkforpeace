@@ -2,6 +2,21 @@ import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { verifyAuth } from '@walkforpeace/shared'
 
+function parseDeviceName(ua: string): string {
+  const mobile = ua.match(/\(([^)]+)\)/)
+  if (mobile) {
+    const parts = mobile[1]
+    const android = parts.match(/;\s*(SM-[A-Z0-9]+|Pixel\s*\w+|Redmi\s*[^\s;]+|SAMSUNG\s*[^\s;]+|Xiaomi\s*[^\s;]+|OPPO\s*[^\s;]+|vivo\s*[^\s;]+|OnePlus\s*[^\s;]+|Huawei\s*[^\s;]+)/i)
+    if (android) return android[1].trim()
+    if (parts.includes('iPhone')) return 'iPhone'
+    if (parts.includes('iPad')) return 'iPad'
+  }
+  if (ua.includes('Windows')) return 'Windows PC'
+  if (ua.includes('Mac')) return 'Mac'
+  if (ua.includes('Linux')) return 'Linux PC'
+  return 'Unknown Device'
+}
+
 export default function PasswordPage() {
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -15,7 +30,11 @@ export default function PasswordPage() {
     setLoading(true)
     setError('')
     try {
-      await verifyAuth(password)
+      await verifyAuth(password, {
+        device_info: navigator.userAgent,
+        device_name: parseDeviceName(navigator.userAgent),
+        screen_size: `${screen.width}x${screen.height}`,
+      })
       navigate('/scan')
     } catch {
       setError('Incorrect password. Please try again.')

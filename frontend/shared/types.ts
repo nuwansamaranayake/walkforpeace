@@ -69,6 +69,8 @@ export interface DashboardStats {
   approved: number
   rejected: number
   flagged: number
+  total_scans_today: number
+  active_gatekeepers: number
 }
 
 export interface ApplicationListItem {
@@ -153,4 +155,30 @@ export interface VerificationLogItem {
   scanned_by_ip: string
   result: string
   verified_by_action: string | null
+}
+
+// Scan log for per-application scan history (Task 2)
+export interface ScanLogItem {
+  id: string
+  scanned_at: string
+  scanned_by_ip: string | null
+  result: string
+  verified_by_action: string | null
+  latitude: number | null
+  longitude: number | null
+  place_name: string | null
+  device_id: string | null
+}
+
+// Gatekeeper info (Task 4)
+export interface GatekeeperInfo {
+  id: string
+  device_name: string | null
+  device_ip: string | null
+  screen_size: string | null
+  total_scans: number
+  last_scan_at: string | null
+  last_location: string | null
+  created_at: string
+  status: 'active' | 'inactive'
 }

@@ -20,6 +20,7 @@ from app.models.models import (
     MediaType,
     VerificationLog,
 )
+from app.models.verify_session import VerifySession
 from app.schemas.schemas import (
     ApplicationDetail,
     ApplicationListItem,
@@ -29,9 +30,11 @@ from app.schemas.schemas import (
     ChangePasswordRequest,
     CredentialInfo,
     DashboardStats,
+    GatekeeperInfo,
     LoginRequest,
     LoginResponse,
     ReviewRequest,
+    ScanLogItem,
     VerificationLogItem,
     VerificationLogResponse,
 )
@@ -477,6 +480,78 @@ async def list_verification_logs(
     )
 
 
+@router.get("/applications/{app_id}/scans", response_model=list[ScanLogItem])
+async def get_application_scans(
+    app_id: uuid.UUID,
+    admin: AdminUser = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get all scan logs for a specific application."""
+    # Find the credential for this application
+    cred_result = await db.execute(
+        select(Credential).where(Credential.application_id == app_id)
+    )
+    cred = cred_result.scalar_one_or_none()
+    if not cred:
+        return []
+
+    result = await db.execute(
+        select(VerificationLog)
+        .where(VerificationLog.credential_id == cred.id)
+        .order_by(VerificationLog.scanned_at.desc())
+        .limit(100)
+    )
+    logs = result.scalars().all()
+
+    return [
+        ScanLogItem(
+            id=log.id,
+            scanned_at=log.scanned_at,
+            scanned_by_ip=log.scanned_by_ip,
+            result=log.result.value,
+            verified_by_action=log.verified_by_action,
+            latitude=log.latitude,
+            longitude=log.longitude,
+            place_name=log.place_name,
+            device_id=log.device_id,
+        )
+        for log in logs
+    ]
+
+
+@router.get("/gatekeepers", response_model=list[GatekeeperInfo])
+async def list_gatekeepers(
+    admin: AdminUser = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all verify sessions with device info and scan counts."""
+    now = datetime.now(timezone.utc)
+    ten_min_ago = now - timedelta(minutes=10)
+
+    result = await db.execute(
+        select(VerifySession)
+        .where(VerifySession.is_expired == False)
+        .where(VerifySession.expires_at > now)
+        .order_by(VerifySession.last_scan_at.desc().nullslast())
+    )
+    sessions = result.scalars().all()
+
+    return [
+        GatekeeperInfo(
+            id=s.id,
+            device_name=s.device_name or (s.device_info[:60] + "..." if s.device_info and len(s.device_info) > 60 else s.device_info),
+            device_ip=s.device_ip,
+            screen_size=s.screen_size,
+            total_scans=s.total_scans or 0,
+            last_scan_at=s.last_scan_at,
+            last_location=s.last_location,
+            created_at=s.created_at,
+            status="active" if s.last_scan_at and s.last_scan_at > ten_min_ago else "inactive",
+        )
+        for s in sessions
+    ]
+
+
 @router.get("/stats", response_model=DashboardStats)
 async def dashboard_stats(
     admin: AdminUser = Depends(get_current_admin),
@@ -517,6 +592,28 @@ async def dashboard_stats(
         await db.execute(select(func.count(Credential.id)))
     ).scalar()
 
+    # Total scans today
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    scans_today = (
+        await db.execute(
+            select(func.count(VerificationLog.id)).where(
+                VerificationLog.scanned_at >= today_start
+            )
+        )
+    ).scalar()
+
+    # Active gatekeepers (sessions with scan in last 10 min)
+    ten_min_ago = datetime.now(timezone.utc) - timedelta(minutes=10)
+    active_gk = (
+        await db.execute(
+            select(func.count(VerifySession.id)).where(
+                VerifySession.is_expired == False,
+                VerifySession.expires_at > datetime.now(timezone.utc),
+                VerifySession.last_scan_at > ten_min_ago,
+            )
+        )
+    ).scalar()
+
     return DashboardStats(
         total_registered=total or 0,
         pending=pending or 0,
@@ -524,4 +621,6 @@ async def dashboard_stats(
         rejected=rejected or 0,
         flagged=flagged or 0,
         credentials_issued=creds or 0,
+        total_scans_today=scans_today or 0,
+        active_gatekeepers=active_gk or 0,
     )

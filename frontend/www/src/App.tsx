@@ -69,6 +69,13 @@ function App() {
             &copy; 2026 Walk for Peace Sri Lanka
           </p>
         </div>
+        <p className="mt-3" style={{ fontSize: '11px', color: '#6b7280' }}>
+          Developed by{' '}
+          <a href="https://aignitek.com" target="_blank" rel="noopener noreferrer" style={{ color: '#6b7280', textDecoration: 'underline', textUnderlineOffset: '2px' }}>AiGNITE</a>{' '}
+          Software Pvt. Ltd.{' '}
+          <span style={{ margin: '0 4px', opacity: 0.5 }}>&bull;</span>{' '}
+          <a href="https://aignitek.com" target="_blank" rel="noopener noreferrer" style={{ color: '#6b7280' }}>aignitek.com</a>
+        </p>
       </footer>
     </div>
   )

@@ -1,44 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, CheckCircle, XCircle, Loader2, Download } from 'lucide-react'
+import { ArrowLeft, CheckCircle, XCircle, Loader2, Download, Clock, MapPin } from 'lucide-react'
 import {
-  getApplication, reviewApplication, revokeCredential, StatusBadge,
+  getApplication, reviewApplication, revokeCredential, StatusBadge, getApplicationScans,
 } from '@walkforpeace/shared'
-import type { ApplicationDetail } from '@walkforpeace/shared'
-
-function OcrField({ label, extracted, actual }: { label: string; extracted: string | null; actual: string | null }) {
-  const bothPresent = extracted !== null && actual !== null
-  const match = bothPresent && extracted.trim().toLowerCase() === actual.trim().toLowerCase()
-  const borderClass = extracted === null
-    ? 'border-gray-200 bg-gray-50'
-    : match
-      ? 'border-green-300 bg-green-50'
-      : 'border-amber-300 bg-amber-50'
-
-  return (
-    <div className={`border rounded-lg p-3 ${borderClass}`}>
-      <p className="text-xs text-gray-500 mb-1 font-medium">{label}</p>
-      <div className="flex flex-col gap-1 text-sm">
-        <div className="flex justify-between">
-          <span className="text-gray-400 text-xs">OCR extracted:</span>
-          <span className="font-mono text-xs font-medium">{extracted ?? <span className="text-gray-300 italic">null</span>}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-gray-400 text-xs">Submitted:</span>
-          <span className="font-mono text-xs font-medium">{actual ?? '—'}</span>
-        </div>
-      </div>
-      {bothPresent && (
-        <div className={`mt-1 text-xs font-semibold ${match ? 'text-green-700' : 'text-amber-700'}`}>
-          {match ? 'Match' : 'Mismatch'}
-        </div>
-      )}
-      {extracted === null && (
-        <div className="mt-1 text-xs text-gray-400 italic">OCR returned no data</div>
-      )}
-    </div>
-  )
-}
+import type { ApplicationDetail, ScanLogItem } from '@walkforpeace/shared'
 
 export default function ReviewPage() {
   const { id } = useParams()
@@ -48,6 +14,8 @@ export default function ReviewPage() {
   const [action, setAction] = useState<'approve' | 'reject' | null>(null)
   const [notes, setNotes] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [scans, setScans] = useState<ScanLogItem[]>([])
+  const [scansLoading, setScansLoading] = useState(false)
 
   const loadApp = async () => {
     if (!id) return
@@ -61,7 +29,20 @@ export default function ReviewPage() {
     }
   }
 
-  useEffect(() => { loadApp() }, [id])
+  const loadScans = async () => {
+    if (!id) return
+    setScansLoading(true)
+    try {
+      const data = await getApplicationScans(id)
+      setScans(data)
+    } catch {
+      // scans are optional
+    } finally {
+      setScansLoading(false)
+    }
+  }
+
+  useEffect(() => { loadApp(); loadScans() }, [id])
 
   const handleReview = async () => {
     if (!action || !id) return
@@ -109,9 +90,9 @@ export default function ReviewPage() {
 
       <div className="max-w-6xl mx-auto px-4 py-6">
         <div className="grid lg:grid-cols-3 gap-6">
-          {/* Left: Photos */}
+          {/* Left: Photos + Scan History */}
           <div className="lg:col-span-2 space-y-4">
-            {/* Identity verification — admin compares ID document and live photo */}
+            {/* Identity verification — ID document and live photo side by side */}
             <div className="bg-white rounded-xl shadow-sm p-6">
               <h2 className="font-semibold text-navy mb-4">Identity Verification</h2>
               <div className="grid md:grid-cols-2 gap-4">
@@ -120,7 +101,8 @@ export default function ReviewPage() {
                   <img
                     src={app.id_document_url}
                     alt="ID document"
-                    className="w-full h-64 object-contain rounded-lg border bg-gray-50"
+                    className="w-full object-contain rounded-lg border bg-gray-50"
+                    style={{ minHeight: '280px', maxHeight: '480px' }}
                   />
                 </div>
                 <div>
@@ -128,41 +110,73 @@ export default function ReviewPage() {
                   <img
                     src={app.face_photo_url}
                     alt="Live face"
-                    className="w-full h-64 object-contain rounded-lg border bg-gray-50"
+                    className="w-full object-contain rounded-lg border bg-gray-50"
+                    style={{ minHeight: '280px', maxHeight: '480px' }}
                   />
                 </div>
               </div>
               <p className="mt-3 text-sm text-gray-500">Compare the ID document photo with the live face photo to verify identity.</p>
             </div>
 
-            {/* Full ID document */}
+            {/* Scan History */}
             <div className="bg-white rounded-xl shadow-sm p-6">
-              <h2 className="font-semibold text-navy mb-3">ID Document</h2>
-              <img
-                src={app.id_document_url}
-                alt="ID document"
-                className="w-full max-h-96 object-contain rounded-lg border bg-gray-50"
-              />
-            </div>
-
-            {/* OCR Comparison */}
-            <div className="bg-white rounded-xl shadow-sm p-6">
-              <h2 className="font-semibold text-navy mb-4">OCR Comparison</h2>
-              <div className="grid md:grid-cols-2 gap-4">
-                <OcrField
-                  label="Name"
-                  extracted={app.ocr_extracted_name}
-                  actual={app.full_name}
-                />
-                <OcrField
-                  label="ID Number"
-                  extracted={app.ocr_extracted_id}
-                  actual={app.id_number}
-                />
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-semibold text-navy flex items-center gap-2">
+                  <Clock className="w-4 h-4" /> Scan History
+                </h2>
+                <span className="text-xs bg-navy/10 text-navy px-2 py-1 rounded-full font-medium">
+                  {scans.length} scan{scans.length !== 1 ? 's' : ''}
+                </span>
               </div>
-              <p className="text-xs text-gray-400 mt-3">
-                Green = values match. Amber = mismatch detected. Gray = OCR returned no data.
-              </p>
+              {scansLoading ? (
+                <p className="text-gray-400 text-sm py-4 text-center">Loading scan history...</p>
+              ) : scans.length === 0 ? (
+                <p className="text-gray-400 text-sm py-4 text-center">No scans recorded yet</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
+                      <tr>
+                        <th className="px-3 py-2 text-left">Time</th>
+                        <th className="px-3 py-2 text-left">Location</th>
+                        <th className="px-3 py-2 text-left">Result</th>
+                        <th className="px-3 py-2 text-left">Gate Action</th>
+                        <th className="px-3 py-2 text-left">Device</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {scans.map(scan => (
+                        <tr key={scan.id} className="text-xs">
+                          <td className="px-3 py-2 whitespace-nowrap">{new Date(scan.scanned_at).toLocaleString()}</td>
+                          <td className="px-3 py-2">
+                            {scan.place_name ? (
+                              <span className="flex items-center gap-1">
+                                <MapPin className="w-3 h-3 text-gray-400 shrink-0" />
+                                {scan.place_name}
+                              </span>
+                            ) : scan.latitude && scan.longitude ? (
+                              <span className="text-gray-400 font-mono">{scan.latitude.toFixed(4)}, {scan.longitude.toFixed(4)}</span>
+                            ) : (
+                              <span className="text-gray-300">—</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2">
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                              scan.result === 'valid' ? 'bg-green-100 text-green-700' :
+                              scan.result === 'expired' ? 'bg-yellow-100 text-yellow-700' :
+                              'bg-red-100 text-red-700'
+                            }`}>
+                              {scan.result}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-gray-500">{scan.verified_by_action ?? '—'}</td>
+                          <td className="px-3 py-2 text-gray-400">{scan.device_id ?? scan.scanned_by_ip ?? '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
 

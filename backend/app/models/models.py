@@ -189,4 +189,17 @@ class VerificationLog(Base):
         String(20), nullable=True
     )  # null | "gate_approved" | "gate_denied"
 
+    # GPS location tracking (Task 2)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    place_name = Column(String(200), nullable=True)
+    device_id = Column(String(100), nullable=True)  # browser session ID
+
+    # Link to verify session for gatekeeper tracking
+    verify_session_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("verify_sessions.id"),
+        nullable=True,
+    )
+
     credential = relationship("Credential", back_populates="verification_logs")
