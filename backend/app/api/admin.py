@@ -528,11 +528,17 @@ async def list_gatekeepers(
     now = datetime.now(timezone.utc)
     ten_min_ago = now - timedelta(minutes=10)
 
+    twenty_four_hours_ago = now - timedelta(hours=24)
     result = await db.execute(
         select(VerifySession)
         .where(VerifySession.is_expired == False)
         .where(VerifySession.expires_at > now)
+        .where(
+            # Only show sessions that have scanned or were created recently
+            (VerifySession.total_scans > 0) | (VerifySession.created_at > twenty_four_hours_ago)
+        )
         .order_by(VerifySession.last_scan_at.desc().nullslast())
+        .limit(50)
     )
     sessions = result.scalars().all()
 
