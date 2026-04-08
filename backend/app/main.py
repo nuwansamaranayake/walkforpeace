@@ -87,11 +87,10 @@ app.include_router(admin_router)
 app.include_router(verification_router)
 app.include_router(verify_auth_router)
 
-# Serve uploaded files in development
-if settings.ENVIRONMENT == "development":
-    uploads_path = Path(settings.UPLOAD_DIR)
-    uploads_path.mkdir(parents=True, exist_ok=True)
-    app.mount("/uploads", StaticFiles(directory=str(uploads_path)), name="uploads")
+# Serve uploaded files (all environments — nginx proxies /uploads/ here)
+uploads_path = Path(settings.UPLOAD_DIR)
+uploads_path.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(uploads_path)), name="uploads")
 
 
 @app.get("/api/health")
