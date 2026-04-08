@@ -49,24 +49,45 @@ services:
     ports:
       - "8000:8000"
 
-  frontend:
-    build: ./frontend
+  frontend-register:
+    build:
+      context: .
+      dockerfile: frontend/register/Dockerfile
     restart: "no"
     volumes:
-      - frontend_build:/app/dist
+      - register_build:/app/dist
+
+  frontend-verify:
+    build:
+      context: .
+      dockerfile: frontend/verify/Dockerfile
+    restart: "no"
+    volumes:
+      - verify_build:/app/dist
+
+  frontend-admin:
+    build:
+      context: .
+      dockerfile: frontend/admin/Dockerfile
+    restart: "no"
+    volumes:
+      - admin_build:/app/dist
 
   nginx:
     image: nginx:alpine
     restart: unless-stopped
     depends_on:
       - api
-      - frontend
+      - frontend-register
+      - frontend-verify
+      - frontend-admin
     ports:
       - "80:80"
     volumes:
+      - register_build:/var/www/register:ro
+      - verify_build:/var/www/verify:ro
+      - admin_build:/var/www/admin:ro
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - frontend_build:/usr/share/nginx/html:ro
-      - uploads:/app/uploads:ro
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/api/health"]
       interval: 30s
@@ -76,4 +97,6 @@ services:
 volumes:
   pgdata:
   uploads:
-  frontend_build:
+  register_build:
+  verify_build:
+  admin_build:
