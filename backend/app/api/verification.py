@@ -68,7 +68,7 @@ async def verify_credential(
     session: Optional[VerifySession] = Depends(get_verify_session),
 ):
     """Verify a media credential. Response depth depends on verify session."""
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = request.headers.get("x-real-ip") or request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (request.client.host if request.client else "unknown")
     session_id = session.id if session else None
 
     payload = decode_credential_token(credential_token)
@@ -197,7 +197,7 @@ async def gate_approve(
     session: VerifySession = Depends(require_verify_session),
 ):
     """Security officer approves a flagged credential at the gate."""
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = request.headers.get("x-real-ip") or request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (request.client.host if request.client else "unknown")
 
     payload = decode_credential_token(credential_token)
     if not payload or payload.get("error"):
@@ -238,7 +238,7 @@ async def gate_deny(
     session: VerifySession = Depends(require_verify_session),
 ):
     """Security officer denies a flagged credential at the gate."""
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = request.headers.get("x-real-ip") or request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (request.client.host if request.client else "unknown")
 
     payload = decode_credential_token(credential_token)
     if not payload or payload.get("error"):

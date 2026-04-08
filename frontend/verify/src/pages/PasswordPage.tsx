@@ -1,16 +1,13 @@
-import { useState, type FormEvent } from 'react'
+import { useState, useEffect, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { verifyAuth } from '@walkforpeace/shared'
 
 function parseDeviceName(ua: string): string {
-  const mobile = ua.match(/\(([^)]+)\)/)
-  if (mobile) {
-    const parts = mobile[1]
-    const android = parts.match(/;\s*(SM-[A-Z0-9]+|Pixel\s*\w+|Redmi\s*[^\s;]+|SAMSUNG\s*[^\s;]+|Xiaomi\s*[^\s;]+|OPPO\s*[^\s;]+|vivo\s*[^\s;]+|OnePlus\s*[^\s;]+|Huawei\s*[^\s;]+)/i)
-    if (android) return android[1].trim()
-    if (parts.includes('iPhone')) return 'iPhone'
-    if (parts.includes('iPad')) return 'iPad'
-  }
+  // Android: "Linux; Android 12; SM-A127F Build/..."
+  const android = ua.match(/\(Linux;.*?;\s*(.+?)\s*Build/)
+  if (android) return android[1].trim()
+  if (ua.includes('iPhone')) return 'iPhone'
+  if (ua.includes('iPad')) return 'iPad'
   if (ua.includes('Windows')) return 'Windows PC'
   if (ua.includes('Mac')) return 'Mac'
   if (ua.includes('Linux')) return 'Linux PC'
@@ -23,6 +20,18 @@ export default function PasswordPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
+
+  // Request GPS permission early — so the prompt appears on this page,
+  // and all scans on ScanPage silently use the cached permission.
+  useEffect(() => {
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        () => { /* Permission granted — ScanPage will use it */ },
+        () => { /* Denied — that's OK, scans work without GPS */ },
+        { enableHighAccuracy: true, timeout: 10000 }
+      )
+    }
+  }, [])
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()

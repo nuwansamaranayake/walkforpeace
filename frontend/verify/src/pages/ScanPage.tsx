@@ -20,44 +20,50 @@ function extractToken(decodedText: string): string {
   return decodedText.trim()
 }
 
-function parseDeviceName(ua: string): string {
-  // Try to extract device model from user agent
-  const mobile = ua.match(/\(([^)]+)\)/)
-  if (mobile) {
-    const parts = mobile[1]
-    // Android: "Linux; Android 12; SM-A127F"
-    const android = parts.match(/;\s*(SM-[A-Z0-9]+|Pixel\s*\w+|Redmi\s*[^\s;]+|SAMSUNG\s*[^\s;]+|Xiaomi\s*[^\s;]+|OPPO\s*[^\s;]+|vivo\s*[^\s;]+|OnePlus\s*[^\s;]+|Huawei\s*[^\s;]+)/i)
-    if (android) return android[1].trim()
-    // iOS
-    if (parts.includes('iPhone')) return 'iPhone'
-    if (parts.includes('iPad')) return 'iPad'
-  }
-  // Desktop
-  if (ua.includes('Windows')) return 'Windows PC'
-  if (ua.includes('Mac')) return 'Mac'
-  if (ua.includes('Linux')) return 'Linux PC'
-  return 'Unknown Device'
+// ─── GPS + Reverse Geocoding ────────────────────────────────────────
+let cachedGps: { lat: number; lng: number; place?: string } | null = null
+let watchId: number | null = null
+
+function reverseGeocode(lat: number, lng: number) {
+  // Nominatim free reverse geocoding — no API key needed
+  fetch(
+    `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&zoom=16`,
+    { headers: { 'User-Agent': 'WalkForPeace/1.0' } }
+  )
+    .then(r => r.json())
+    .then(data => {
+      if (data?.display_name && cachedGps) {
+        // Shorten: "Kandy-Colombo Road, Kandy, Central Province, Sri Lanka" → first 2-3 parts
+        const parts = data.display_name.split(', ')
+        cachedGps.place = parts.slice(0, 3).join(', ')
+      }
+    })
+    .catch(() => { /* Geocoding failed — that's OK */ })
 }
 
-// GPS helper — returns cached position or null (never blocks)
-let cachedGps: { lat: number; lng: number } | null = null
-let gpsRequested = false
-
-function requestGps() {
-  if (gpsRequested) return
-  gpsRequested = true
-  if ('geolocation' in navigator) {
-    navigator.geolocation.getCurrentPosition(
+function startGpsTracking() {
+  if (!('geolocation' in navigator)) return
+  // Get initial position
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      cachedGps = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+      reverseGeocode(pos.coords.latitude, pos.coords.longitude)
+    },
+    () => { /* GPS denied */ },
+    { enableHighAccuracy: true, timeout: 10000 }
+  )
+  // Watch for updates
+  if (watchId === null) {
+    watchId = navigator.geolocation.watchPosition(
       (pos) => {
-        cachedGps = { lat: pos.coords.latitude, lng: pos.coords.longitude }
-      },
-      () => { /* GPS denied — that's OK */ },
-      { enableHighAccuracy: true, timeout: 10000 }
-    )
-    // Also watch for updates
-    navigator.geolocation.watchPosition(
-      (pos) => {
-        cachedGps = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+        const newLat = pos.coords.latitude
+        const newLng = pos.coords.longitude
+        // Only re-geocode if moved significantly (~100m)
+        const moved = cachedGps
+          ? Math.abs(newLat - cachedGps.lat) > 0.001 || Math.abs(newLng - cachedGps.lng) > 0.001
+          : true
+        cachedGps = { lat: newLat, lng: newLng, place: cachedGps?.place }
+        if (moved) reverseGeocode(newLat, newLng)
       },
       () => {},
       { enableHighAccuracy: false, timeout: 30000 }
@@ -65,7 +71,7 @@ function requestGps() {
   }
 }
 
-// Stable device ID for this session
+// ─── Device ID ──────────────────────────────────────────────────────
 function getDeviceId(): string {
   let id = sessionStorage.getItem('wfp_device_id')
   if (!id) {
@@ -75,6 +81,7 @@ function getDeviceId(): string {
   return id
 }
 
+// ─── Component ──────────────────────────────────────────────────────
 export default function ScanPage() {
   const navigate = useNavigate()
   const [pageState, setPageState] = useState<PageState>('scanning')
@@ -85,8 +92,8 @@ export default function ScanPage() {
   const [showTimeoutWarning, setShowTimeoutWarning] = useState(false)
   const lastActivityRef = useRef(Date.now())
 
-  // Request GPS on mount
-  useEffect(() => { requestGps() }, [])
+  // Start GPS tracking on mount (permission was already requested on PasswordPage)
+  useEffect(() => { startGpsTracking() }, [])
 
   // Session check
   useEffect(() => {
@@ -95,7 +102,7 @@ export default function ScanPage() {
     }
   }, [navigate])
 
-  // Inactivity auto-logout (Task 3)
+  // Inactivity auto-logout
   useEffect(() => {
     const resetActivity = () => {
       lastActivityRef.current = Date.now()
@@ -113,7 +120,7 @@ export default function ScanPage() {
       } else if (elapsed > WARNING_MS) {
         setShowTimeoutWarning(true)
       }
-    }, 15000) // check every 15s
+    }, 15000)
 
     return () => {
       events.forEach(e => document.removeEventListener(e, resetActivity))
@@ -132,10 +139,13 @@ export default function ScanPage() {
     setScanError('')
 
     try {
-      const gps = cachedGps
-        ? { lat: cachedGps.lat, lng: cachedGps.lng, device_id: getDeviceId() }
-        : { device_id: getDeviceId() }
-      const data = await verifyCredential(token, gps)
+      const gpsParams: Record<string, any> = { device_id: getDeviceId() }
+      if (cachedGps) {
+        gpsParams.lat = cachedGps.lat
+        gpsParams.lng = cachedGps.lng
+        if (cachedGps.place) gpsParams.place = cachedGps.place
+      }
+      const data = await verifyCredential(token, gpsParams)
       setResult(data)
       setPageState('result')
     } catch {

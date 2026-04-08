@@ -27,7 +27,7 @@ async def verify_login(
     if body.password != settings.VERIFY_PASSWORD:
         raise HTTPException(401, "Invalid verification password")
 
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = request.headers.get("x-real-ip") or request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (request.client.host if request.client else "unknown")
     now = datetime.now(timezone.utc)
     expires_at = now + timedelta(hours=settings.VERIFY_SESSION_HOURS)
     session_token = secrets.token_urlsafe(48)
