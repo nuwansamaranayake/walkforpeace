@@ -49,9 +49,9 @@ app = FastAPI(
 
 # CORS — support multi-subdomain
 allowed_origins = [
-    "https://register.walkforpeacelk.com",
-    "https://verify.walkforpeacelk.com",
-    "https://admin.walkforpeacelk.com",
+    "https://register.walkforpeacelk.org",
+    "https://verify.walkforpeacelk.org",
+    "https://admin.walkforpeacelk.org",
     "https://walkforpeacelk.org",
     "https://www.walkforpeacelk.org",
 ]

@@ -44,11 +44,13 @@ class CSRFMiddleware:
 
         # Parse and validate
         parsed = urlparse(source)
+        hostname = parsed.hostname or ""
         allowed_hosts = {"walkforpeacelk.org", "www.walkforpeacelk.org"}
         if settings.ENVIRONMENT == "development":
             allowed_hosts.update({"localhost", "127.0.0.1", "test"})
 
-        if parsed.hostname not in allowed_hosts:
+        is_allowed = hostname in allowed_hosts or hostname.endswith(".walkforpeacelk.org")
+        if not is_allowed:
             logger.warning(f"CSRF blocked: {scope.get('method')} {scope.get('path')} from {source}")
             body = json.dumps({"detail": "Cross-origin request blocked"}).encode()
             await send({
