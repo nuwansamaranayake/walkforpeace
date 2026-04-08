@@ -6,7 +6,7 @@ function App() {
         <img
           src="/logo.png"
           alt="Walk for Peace Dove Logo"
-          className="w-48 h-48 md:w-52 md:h-52 object-contain mb-8 rounded-full"
+          className="w-48 h-48 md:w-52 md:h-52 object-contain mb-8"
         />
 
         <h1 className="text-4xl md:text-6xl font-bold text-white mb-3">
