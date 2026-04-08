@@ -36,6 +36,9 @@ Thumbs.db
 # Docker
 *.log
 
+# Superpowers
+.superpowers/
+
 # Test artifacts
 /test_*.jpg
 /test_*.png
