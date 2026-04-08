@@ -36,7 +36,7 @@ export interface RetrieveResponse {
 export interface OCRResponse {
   id_number: string | null
   name: string | null
-  confidence: number
+  confidence: string | null
 }
 
 // Verification

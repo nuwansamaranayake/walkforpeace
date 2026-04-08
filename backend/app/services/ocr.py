@@ -40,12 +40,17 @@ def extract_id_info(image_bytes: bytes) -> dict:
                 result["id_number"] = old_nic.group(1).upper()
                 result["confidence"] = "high"
 
-        # Best-effort name extraction
-        name_match = re.search(r'(?:Name|නම)\s*[:\-]?\s*([A-Z][A-Z\s\.]+)', text, re.IGNORECASE)
+        # Best-effort name extraction — grab the rest of the line after "Name:"
+        # Clean OCR artifacts (pipes, brackets) that Tesseract sometimes produces
+        name_match = re.search(r'(?:Name)\s*[:\-|]?\s*(.+)', text)
         if name_match:
-            name = name_match.group(1).strip()
+            raw = name_match.group(1).strip()
+            # Keep only letters, spaces, dots — remove pipes, digits, special chars
+            name = re.sub(r'[^A-Za-z\s\.]', '', raw).strip()
+            # Collapse multiple spaces
+            name = re.sub(r'\s+', ' ', name)
             if len(name) >= 3:
-                result["name"] = name
+                result["name"] = name.upper()
                 if result["confidence"] is None:
                     result["confidence"] = "low"
 

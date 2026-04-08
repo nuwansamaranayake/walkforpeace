@@ -61,9 +61,14 @@ export default function RegisterPage() {
         const result = await ocrExtract(file)
         if (result.id_number) {
           setForm(prev => ({ ...prev, id_number: result.id_number! }))
-          setOcrMessage(`ID number extracted automatically (confidence: ${Math.round(result.confidence * 100)}%)`)
+          if (result.name) {
+            setForm(prev => ({ ...prev, id_number: result.id_number!, full_name: result.name! }))
+            setOcrMessage('ID number and name extracted automatically')
+          } else {
+            setOcrMessage('ID number extracted automatically')
+          }
         } else {
-          setOcrMessage('Could not extract ID number automatically — please enter it manually.')
+          setOcrMessage('Could not extract ID number automatically -- please enter it manually.')
         }
       } catch {
         setOcrMessage('OCR failed — please enter your ID number manually.')
