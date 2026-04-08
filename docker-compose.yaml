@@ -1,0 +1,139 @@
+# Production compose — deployed via Hostinger API (Traefik reverse proxy)
+# For local development, use: docker compose -f docker-compose.yml up
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: walkforpeace
+      POSTGRES_USER: walkforpeace
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U walkforpeace"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - walkforpeace-net
+
+  api:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://walkforpeace:${DB_PASSWORD}@postgres:5432/walkforpeace
+      DATABASE_URL_SYNC: postgresql://walkforpeace:${DB_PASSWORD}@postgres:5432/walkforpeace
+      JWT_SECRET: ${JWT_SECRET}
+      CREDENTIAL_SECRET: ${CREDENTIAL_SECRET}
+      EVENT_DATE: "2026-04-21"
+      APP_URL: https://register.walkforpeacelk.org
+      ENVIRONMENT: production
+      UPLOAD_DIR: /app/uploads
+      R2_ENDPOINT_URL: ${R2_ENDPOINT_URL:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_BUCKET_NAME: ${R2_BUCKET_NAME:-walkforpeace-media}
+      R2_PUBLIC_URL: ${R2_PUBLIC_URL:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-noreply@walkforpeacelk.org}
+      ADMIN_DEFAULT_USERNAME: ${ADMIN_DEFAULT_USERNAME:-admin}
+      ADMIN_DEFAULT_PASSWORD: ${ADMIN_DEFAULT_PASSWORD}
+      FACE_MATCH_THRESHOLD: "0.60"
+      VERIFY_PASSWORD: ${VERIFY_PASSWORD}
+      VERIFY_SESSION_HOURS: ${VERIFY_SESSION_HOURS:-24}
+      CORS_ORIGINS: https://register.walkforpeacelk.org,https://verify.walkforpeacelk.org,https://admin.walkforpeacelk.org
+    volumes:
+      - uploads:/app/uploads
+    networks:
+      - walkforpeace-net
+
+  frontend-register:
+    build:
+      context: .
+      dockerfile: frontend/register/Dockerfile
+    restart: "no"
+    volumes:
+      - register_build:/app/dist
+    networks:
+      - walkforpeace-net
+
+  frontend-verify:
+    build:
+      context: .
+      dockerfile: frontend/verify/Dockerfile
+    restart: "no"
+    volumes:
+      - verify_build:/app/dist
+    networks:
+      - walkforpeace-net
+
+  frontend-admin:
+    build:
+      context: .
+      dockerfile: frontend/admin/Dockerfile
+    restart: "no"
+    volumes:
+      - admin_build:/app/dist
+    networks:
+      - walkforpeace-net
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    depends_on:
+      - api
+      - frontend-register
+      - frontend-verify
+      - frontend-admin
+    ports:
+      - "8080:80"
+    volumes:
+      - register_build:/var/www/register:ro
+      - verify_build:/var/www/verify:ro
+      - admin_build:/var/www/admin:ro
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    labels:
+      - "traefik.enable=true"
+      # Register subdomain
+      - "traefik.http.routers.wfp-register.rule=Host(`register.walkforpeacelk.org`)"
+      - "traefik.http.routers.wfp-register.entrypoints=websecure"
+      - "traefik.http.routers.wfp-register.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.wfp-register.service=wfp-nginx"
+      # Verify subdomain
+      - "traefik.http.routers.wfp-verify.rule=Host(`verify.walkforpeacelk.org`)"
+      - "traefik.http.routers.wfp-verify.entrypoints=websecure"
+      - "traefik.http.routers.wfp-verify.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.wfp-verify.service=wfp-nginx"
+      # Admin subdomain
+      - "traefik.http.routers.wfp-admin.rule=Host(`admin.walkforpeacelk.org`)"
+      - "traefik.http.routers.wfp-admin.entrypoints=websecure"
+      - "traefik.http.routers.wfp-admin.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.wfp-admin.service=wfp-nginx"
+      # Single service — nginx handles Host-based routing internally
+      - "traefik.http.services.wfp-nginx.loadbalancer.server.port=80"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - walkforpeace-net
+
+volumes:
+  pgdata:
+  uploads:
+  register_build:
+  verify_build:
+  admin_build:
+
+networks:
+  walkforpeace-net:
+    driver: bridge
