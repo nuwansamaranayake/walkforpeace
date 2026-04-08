@@ -252,8 +252,8 @@ async def retrieve_credential(
     else:
         query = query.where(MediaApplication.id_number == id_number)
 
-    result = await db.execute(query)
-    app = result.scalar_one_or_none()
+    result = await db.execute(query.order_by(MediaApplication.created_at.desc()))
+    app = result.scalars().first()
     if not app:
         raise HTTPException(404, "No application found for the given credentials")
 
