@@ -116,16 +116,22 @@ def generate_badge_pdf(
     c.setFont("Helvetica-Bold", 8)
     c.drawString(detail_x + 4 * mm, detail_y + 0.5 * mm, mt_text)
 
-    # QR code (right side)
+    # QR code (right side) — render large for reliable scanning
     try:
         qr_img = Image.open(io.BytesIO(qr_code_bytes))
+        # Upscale to high DPI for crisp print: 35mm at 300 DPI = ~413px
+        # Use NEAREST to keep sharp pixel edges (no anti-alias blur)
+        qr_print_px = 420
+        if qr_img.size[0] < qr_print_px:
+            qr_img = qr_img.resize((qr_print_px, qr_print_px), Image.NEAREST)
+        # Save as PNG — never JPEG for QR codes (compression destroys modules)
         qr_buf = io.BytesIO()
         qr_img.save(qr_buf, format="PNG")
         qr_buf.seek(0)
         qr_reader = ImageReader(qr_buf)
-        qr_size = 28 * mm
-        qr_x = W - qr_size - 8 * mm
-        qr_y = content_top - qr_size - 5 * mm
+        qr_size = 35 * mm
+        qr_x = W - qr_size - 6 * mm
+        qr_y = content_top - qr_size - 3 * mm
         c.drawImage(qr_reader, qr_x, qr_y, qr_size, qr_size)
     except Exception:
         pass
