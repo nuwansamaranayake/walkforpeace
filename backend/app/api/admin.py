@@ -522,6 +522,6 @@ async def dashboard_stats(
         pending=pending or 0,
         approved=approved or 0,
         rejected=rejected or 0,
-        flagged_face_match=flagged or 0,
+        flagged=flagged or 0,
         credentials_issued=creds or 0,
     )

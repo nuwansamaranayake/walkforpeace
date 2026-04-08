@@ -1,6 +1,6 @@
 import axios, { type AxiosInstance } from 'axios'
 import type {
-  RegisterResponse, StatusResponse, RetrieveResponse, OCRResponse,
+  RegisterResponse, StatusResponse, RetrieveResponse,
   VerifyAuthResponse, VerifyResponse, LoginResponse, DashboardStats,
   ApplicationListItem, ApplicationDetail, PaginatedResponse,
   BatchApproveResponse, VerificationLogItem,
@@ -48,15 +48,6 @@ export async function retrieveByPIN(pin: string) {
 
 export async function retrieveByIDNumber(idNumber: string) {
   const { data } = await api.get<RetrieveResponse>('/register/retrieve', { params: { id_number: idNumber } })
-  return data
-}
-
-export async function ocrExtract(file: File) {
-  const formData = new FormData()
-  formData.append('id_document', file)
-  const { data } = await api.post<OCRResponse>('/register/ocr', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  })
   return data
 }
 

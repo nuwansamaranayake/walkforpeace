@@ -33,12 +33,6 @@ export interface RetrieveResponse {
   message: string
 }
 
-export interface OCRResponse {
-  id_number: string | null
-  name: string | null
-  confidence: string | null
-}
-
 // Verification
 export interface VerifyAuthResponse {
   session_token: string
@@ -122,7 +116,7 @@ export interface ApplicationDetail {
   phone: string
   country: string
   id_document_url: string
-  id_face_crop_url: string
+  id_face_crop_url: string | null
   face_photo_url: string
   id_type: string | null
   ocr_extracted_name: string | null

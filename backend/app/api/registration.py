@@ -12,12 +12,10 @@ from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.models.models import ApplicationStatus, Credential, MediaApplication, MediaType
-from app.schemas.schemas import RegisterResponse, StatusResponse, RetrieveResponse, OCRResponse
+from app.schemas.schemas import RegisterResponse, StatusResponse, RetrieveResponse
 from app.services.storage import upload_file, validate_file, generate_file_key
-from app.services.face_match import compute_face_match
 from app.services.email import send_registration_confirmation
 from app.services.pin import generate_pin_code
-from app.services.ocr import extract_id_info
 from app.services.auth import create_credential_token
 from app.services.qr_service import generate_qr_code
 from app.config import settings
@@ -64,7 +62,6 @@ async def register(
     id_number: Optional[str] = Form(None),
     id_type: str = Form("nic"),
     id_document: UploadFile = File(...),
-    id_face_crop: UploadFile = File(...),
     face_photo: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
 ):
@@ -95,7 +92,6 @@ async def register(
     # Validate files
     for file_obj, label in [
         (id_document, "ID document"),
-        (id_face_crop, "ID face crop"),
         (face_photo, "Face photo"),
     ]:
         err = validate_file(file_obj.content_type, file_obj.size or 0)
@@ -104,13 +100,11 @@ async def register(
 
     # Read file bytes
     id_doc_bytes = await id_document.read()
-    id_face_bytes = await id_face_crop.read()
     face_bytes = await face_photo.read()
 
     # Validate sizes after reading
     for label, data in [
         ("ID document", id_doc_bytes),
-        ("ID face crop", id_face_bytes),
         ("Face photo", face_bytes),
     ]:
         if len(data) > 5 * 1024 * 1024:
@@ -120,19 +114,12 @@ async def register(
 
     # Upload files
     id_doc_key = generate_file_key("id-documents", id_document.filename or "id.jpg")
-    id_face_key = generate_file_key("id-faces", id_face_crop.filename or "face.jpg")
     face_key = generate_file_key("face-photos", face_photo.filename or "live.jpg")
 
     id_doc_url = await upload_file(
         id_doc_bytes, id_doc_key, id_document.content_type
     )
-    id_face_url = await upload_file(
-        id_face_bytes, id_face_key, id_face_crop.content_type
-    )
     face_url = await upload_file(face_bytes, face_key, face_photo.content_type)
-
-    # Face matching (async, non-blocking for the user)
-    face_score, face_flagged = await compute_face_match(id_face_bytes, face_bytes)
 
     # Generate reference number
     ref_number = _generate_ref_number()
@@ -160,10 +147,10 @@ async def register(
         country=country.strip(),
         media_type=MediaType(media_type.lower()),
         id_document_url=id_doc_url,
-        id_face_crop_url=id_face_url,
+        id_face_crop_url=None,
         face_photo_url=face_url,
-        face_match_score=face_score,
-        face_match_flagged=face_flagged,
+        face_match_score=None,
+        face_match_flagged=False,
         id_number=id_number,
         id_type=id_type,
         status=ApplicationStatus.PENDING,
@@ -179,7 +166,7 @@ async def register(
     badge_number = f"WFP-{cred_id.hex[:6].upper()}"
     credential_token = create_credential_token(str(cred_id), expires_at)
 
-    verification_status = "flagged" if face_flagged else "pending"
+    verification_status = "pending"
 
     qr_bytes = generate_qr_code(credential_token)
     qr_key = generate_file_key("qr-codes", f"{badge_number}.png")
@@ -282,25 +269,3 @@ async def retrieve_credential(
     )
 
 
-@router.post("/register/ocr", response_model=OCRResponse)
-async def ocr_extract(
-    id_document: UploadFile = File(...),
-):
-    """Extract NIC number from ID document image using OCR."""
-    err = validate_file(id_document.content_type, id_document.size or 0)
-    if err:
-        raise HTTPException(400, f"Invalid file: {err}")
-
-    image_bytes = await id_document.read()
-    if len(image_bytes) > 5 * 1024 * 1024:
-        raise HTTPException(400, "File exceeds 5MB limit")
-    if len(image_bytes) == 0:
-        raise HTTPException(400, "File is empty")
-
-    result = extract_id_info(image_bytes)
-
-    return OCRResponse(
-        id_number=result.get("id_number"),
-        name=result.get("name"),
-        confidence=result.get("confidence"),
-    )

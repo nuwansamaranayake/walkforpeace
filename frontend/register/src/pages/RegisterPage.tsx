@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback } from 'react'
 import Webcam from 'react-webcam'
-import { Camera, Upload, AlertCircle, Loader2, CheckCircle2, ScanLine } from 'lucide-react'
-import { submitRegistration, ocrExtract } from '@walkforpeace/shared'
+import { Camera, Upload, AlertCircle, Loader2 } from 'lucide-react'
+import { submitRegistration } from '@walkforpeace/shared'
 import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from '../i18n/useTranslation'
 
@@ -24,7 +24,7 @@ export default function RegisterPage() {
     designation: '',
     email: '',
     phone: '',
-    country: '',
+    country: 'Sri Lanka',
     media_type: '',
     id_type: 'NIC',
     id_number: '',
@@ -32,13 +32,10 @@ export default function RegisterPage() {
   })
 
   const [idDocument, setIdDocument] = useState<File | null>(null)
-  const [idFaceCrop, setIdFaceCrop] = useState<File | null>(null)
   const [facePhoto, setFacePhoto] = useState<string | null>(null)
   const [faceBlob, setFaceBlob] = useState<Blob | null>(null)
   const [showCamera, setShowCamera] = useState(false)
   const [submitting, setSubmitting] = useState(false)
-  const [ocrLoading, setOcrLoading] = useState(false)
-  const [ocrMessage, setOcrMessage] = useState('')
   const [error, setError] = useState('')
   const webcamRef = useRef<Webcam>(null)
 
@@ -48,34 +45,6 @@ export default function RegisterPage() {
       ...prev,
       [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value,
     }))
-  }
-
-  const handleIdDocumentChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] || null
-    setIdDocument(file)
-    setOcrMessage('')
-
-    if (file) {
-      setOcrLoading(true)
-      try {
-        const result = await ocrExtract(file)
-        if (result.id_number) {
-          setForm(prev => ({ ...prev, id_number: result.id_number! }))
-          if (result.name) {
-            setForm(prev => ({ ...prev, id_number: result.id_number!, full_name: result.name! }))
-            setOcrMessage('ID number and name extracted automatically')
-          } else {
-            setOcrMessage('ID number extracted automatically')
-          }
-        } else {
-          setOcrMessage('Could not extract ID number automatically -- please enter it manually.')
-        }
-      } catch {
-        setOcrMessage('OCR failed — please enter your ID number manually.')
-      } finally {
-        setOcrLoading(false)
-      }
-    }
   }
 
   const capturePhoto = useCallback(() => {
@@ -94,7 +63,6 @@ export default function RegisterPage() {
     setError('')
 
     if (!idDocument) return setError(t('register.errorIdDoc'))
-    if (!idFaceCrop) return setError(t('register.errorIdFace'))
     if (!faceBlob) return setError(t('register.errorFace'))
     if (!form.terms_accepted) return setError(t('register.errorTerms'))
 
@@ -103,7 +71,6 @@ export default function RegisterPage() {
       const fd = new FormData()
       Object.entries(form).forEach(([k, v]) => fd.append(k, String(v)))
       fd.append('id_document', idDocument)
-      fd.append('id_face_crop', idFaceCrop)
       fd.append('face_photo', new File([faceBlob], 'face.jpg', { type: 'image/jpeg' }))
 
       const result = await submitRegistration(fd)
@@ -268,85 +235,35 @@ export default function RegisterPage() {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 {form.id_type === 'NIC' ? 'NIC Number' : 'Passport Number'} *
               </label>
-              <div className="relative">
-                <input
-                  name="id_number"
-                  value={form.id_number}
-                  onChange={handleChange}
-                  required
-                  placeholder={form.id_type === 'NIC' ? 'e.g. 199012345678' : 'e.g. N1234567'}
-                  className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-saffron focus:border-transparent pr-8"
-                />
-                {ocrLoading && (
-                  <Loader2 className="w-4 h-4 animate-spin text-saffron absolute right-2.5 top-2.5" />
-                )}
-              </div>
-              {ocrMessage && (
-                <p
-                  className={`text-xs mt-1.5 flex items-center gap-1 ${
-                    ocrMessage.includes('extracted') ? 'text-green-600' : 'text-amber-600'
-                  }`}
-                >
-                  {ocrMessage.includes('extracted') ? (
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                  ) : (
-                    <ScanLine className="w-3.5 h-3.5" />
-                  )}
-                  {ocrMessage}
-                </p>
-              )}
+              <input
+                name="id_number"
+                value={form.id_number}
+                onChange={handleChange}
+                required
+                placeholder={form.id_type === 'NIC' ? 'e.g. 199012345678' : 'e.g. N1234567'}
+                className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-saffron focus:border-transparent"
+              />
             </div>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-4 mb-4">
-            {/* Full ID — triggers OCR */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                {t('register.idDocument')} *
-              </label>
-              <label className="flex flex-col items-center justify-center border-2 border-dashed rounded-lg p-6 cursor-pointer hover:border-saffron transition">
-                {ocrLoading ? (
-                  <Loader2 className="w-8 h-8 text-saffron animate-spin mb-2" />
-                ) : (
-                  <Upload className="w-8 h-8 text-gray-400 mb-2" />
-                )}
-                <span className="text-sm text-gray-500 text-center">
-                  {idDocument
-                    ? idDocument.name
-                    : t('register.idDocumentHint')}
-                </span>
-                {!idDocument && (
-                  <span className="text-xs text-saffron mt-1 flex items-center gap-1">
-                    <ScanLine className="w-3 h-3" /> OCR will auto-fill ID number
-                  </span>
-                )}
-                <input
-                  type="file"
-                  accept="image/*,application/pdf"
-                  className="hidden"
-                  onChange={handleIdDocumentChange}
-                />
-              </label>
-            </div>
-
-            {/* Face crop from ID */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                {t('register.idFaceCrop')} *
-              </label>
-              <label className="flex flex-col items-center justify-center border-2 border-dashed rounded-lg p-6 cursor-pointer hover:border-saffron transition">
-                <Upload className="w-8 h-8 text-gray-400 mb-2" />
-                <span className="text-sm text-gray-500">
-                  {idFaceCrop ? idFaceCrop.name : t('register.idFaceCropHint')}
-                </span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={e => setIdFaceCrop(e.target.files?.[0] || null)}
-                />
-              </label>
-            </div>
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              {t('register.idDocument')} *
+            </label>
+            <label className="flex flex-col items-center justify-center border-2 border-dashed rounded-lg p-6 cursor-pointer hover:border-saffron transition">
+              <Upload className="w-8 h-8 text-gray-400 mb-2" />
+              <span className="text-sm text-gray-500 text-center">
+                {idDocument
+                  ? idDocument.name
+                  : t('register.idDocumentHint')}
+              </span>
+              <input
+                type="file"
+                accept="image/*,application/pdf"
+                className="hidden"
+                onChange={e => setIdDocument(e.target.files?.[0] || null)}
+              />
+            </label>
           </div>
 
           <p className="text-xs text-gray-400">{t('register.idTip')}</p>

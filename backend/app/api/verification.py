@@ -134,8 +134,6 @@ async def verify_credential(
 
     # Include sensitive fields only with valid verify session
     if session:
-        response.id_face_crop_url = app.id_face_crop_url
-        response.face_match_score = app.face_match_score
         response.can_gate_approve = (vs == "flagged")
 
     return response

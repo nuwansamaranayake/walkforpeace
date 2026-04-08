@@ -61,10 +61,10 @@ class MediaApplication(Base):
         nullable=False,
     )
 
-    # Three image uploads
+    # Image uploads (ID document + live face photo)
     id_document_url = Column(Text, nullable=False)  # Full ID document
-    id_face_crop_url = Column(Text, nullable=False)  # Close-up of face on ID
-    face_photo_url = Column(Text, nullable=False)  # Live camera capture
+    id_face_crop_url = Column(Text, nullable=True)   # Legacy — no longer collected
+    face_photo_url = Column(Text, nullable=False)    # Live camera capture
 
     face_match_score = Column(Float, nullable=True)  # 0.0 to 1.0
     face_match_flagged = Column(

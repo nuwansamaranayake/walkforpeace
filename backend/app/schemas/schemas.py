@@ -107,7 +107,7 @@ class ApplicationDetail(ApplicationListItem):
     phone: str
     country: str
     id_document_url: str
-    id_face_crop_url: str
+    id_face_crop_url: Optional[str] = None
     face_photo_url: str
     id_number: Optional[str] = None
     id_type: Optional[str] = None
@@ -168,7 +168,7 @@ class DashboardStats(BaseModel):
     pending: int
     approved: int
     rejected: int
-    flagged_face_match: int
+    flagged: int
     credentials_issued: int
 
 
@@ -184,13 +184,6 @@ class RetrieveResponse(BaseModel):
     badge_pdf_url: Optional[str] = None
     badge_number: Optional[str] = None
     message: str
-
-
-# --- v2: OCR ---
-class OCRResponse(BaseModel):
-    id_number: Optional[str] = None
-    name: Optional[str] = None
-    confidence: Optional[str] = None
 
 
 # --- v2: Verify Auth ---

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, CheckCircle, XCircle, AlertTriangle, Loader2, Download } from 'lucide-react'
+import { ArrowLeft, CheckCircle, XCircle, Loader2, Download } from 'lucide-react'
 import {
   getApplication, reviewApplication, revokeCredential, StatusBadge,
 } from '@walkforpeace/shared'
@@ -98,8 +98,6 @@ export default function ReviewPage() {
   }
   if (!app) return null
 
-  const matchPct = app.face_match_score !== null ? (app.face_match_score * 100).toFixed(1) : null
-
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="bg-navy text-white px-6 py-4">
@@ -111,27 +109,17 @@ export default function ReviewPage() {
 
       <div className="max-w-6xl mx-auto px-4 py-6">
         <div className="grid lg:grid-cols-3 gap-6">
-          {/* Left: Photos + OCR */}
+          {/* Left: Photos */}
           <div className="lg:col-span-2 space-y-4">
-            {/* Face comparison */}
+            {/* Identity verification — admin compares ID document and live photo */}
             <div className="bg-white rounded-xl shadow-sm p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="font-semibold text-navy">Face Verification</h2>
-                {matchPct && (
-                  <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium ${
-                    app.face_match_flagged ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
-                  }`}>
-                    {app.face_match_flagged && <AlertTriangle className="w-4 h-4" />}
-                    {matchPct}% match
-                  </div>
-                )}
-              </div>
+              <h2 className="font-semibold text-navy mb-4">Identity Verification</h2>
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
-                  <p className="text-xs text-gray-500 mb-2 font-medium">ID Face Close-up</p>
+                  <p className="text-xs text-gray-500 mb-2 font-medium">ID Document</p>
                   <img
-                    src={app.id_face_crop_url}
-                    alt="ID face"
+                    src={app.id_document_url}
+                    alt="ID document"
                     className="w-full h-64 object-contain rounded-lg border bg-gray-50"
                   />
                 </div>
@@ -144,12 +132,7 @@ export default function ReviewPage() {
                   />
                 </div>
               </div>
-              {app.face_match_flagged && (
-                <div className="mt-3 bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 flex items-start gap-2">
-                  <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                  Face match score is below 60% threshold. Please verify identity carefully.
-                </div>
-              )}
+              <p className="mt-3 text-sm text-gray-500">Compare the ID document photo with the live face photo to verify identity.</p>
             </div>
 
             {/* Full ID document */}
