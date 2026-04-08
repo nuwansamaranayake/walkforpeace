@@ -47,10 +47,23 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS
-allowed_origins = ["https://walkforpeacelk.org", "https://www.walkforpeacelk.org"]
+# CORS — support multi-subdomain
+allowed_origins = [
+    "https://register.walkforpeacelk.com",
+    "https://verify.walkforpeacelk.com",
+    "https://admin.walkforpeacelk.com",
+    "https://walkforpeacelk.org",
+    "https://www.walkforpeacelk.org",
+]
+if settings.CORS_ORIGINS:
+    allowed_origins.extend(settings.CORS_ORIGINS.split(","))
 if settings.ENVIRONMENT == "development":
-    allowed_origins.extend(["http://localhost:5173", "http://localhost:3000", "http://localhost:8000"])
+    allowed_origins.extend([
+        "http://localhost:5173", "http://localhost:5174", "http://localhost:5175",
+        "http://localhost:3000", "http://localhost:8000",
+        "http://register.walkforpeacelk.com", "http://verify.walkforpeacelk.com",
+        "http://admin.walkforpeacelk.com",
+    ])
 
 app.add_middleware(
     CORSMiddleware,
@@ -67,10 +80,12 @@ app.add_middleware(CSRFMiddleware)
 from app.api.registration import router as registration_router
 from app.api.admin import router as admin_router
 from app.api.verification import router as verification_router
+from app.api.verify_auth import router as verify_auth_router
 
 app.include_router(registration_router)
 app.include_router(admin_router)
 app.include_router(verification_router)
+app.include_router(verify_auth_router)
 
 # Serve uploaded files in development
 if settings.ENVIRONMENT == "development":
