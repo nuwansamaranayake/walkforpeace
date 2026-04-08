@@ -4,7 +4,7 @@ function App() {
       {/* Hero Section */}
       <div className="flex-1 flex flex-col items-center justify-center text-center max-w-2xl mx-auto">
         <img
-          src="/logo.png"
+          src="/logo.png?v=2"
           alt="Walk for Peace Dove Logo"
           className="w-48 h-48 md:w-52 md:h-52 object-contain mb-8"
         />
