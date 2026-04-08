@@ -1,6 +1,7 @@
 {
   "name": "walkforpeace-frontend",
   "private": true,
+  "workspaces": ["shared", "register", "verify", "admin"],
   "version": "1.0.0",
   "type": "module",
   "scripts": {
