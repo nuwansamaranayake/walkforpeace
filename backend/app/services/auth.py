@@ -97,15 +97,22 @@ async def authenticate_user(
 
 
 async def seed_admin(db: AsyncSession):
-    """Seed default admin user if none exists."""
-    result = await db.execute(select(AdminUser))
-    if result.scalar_one_or_none() is None:
+    """Seed default admin user or reset to defaults."""
+    result = await db.execute(
+        select(AdminUser).where(AdminUser.username == settings.ADMIN_DEFAULT_USERNAME)
+    )
+    existing = result.scalar_one_or_none()
+    if existing is None:
         admin = AdminUser(
             id=uuid.uuid4(),
             username=settings.ADMIN_DEFAULT_USERNAME,
             password_hash=hash_password(settings.ADMIN_DEFAULT_PASSWORD),
-            must_change_password=True,
+            must_change_password=False,
         )
         db.add(admin)
         await db.commit()
         print(f"Seeded admin user: {settings.ADMIN_DEFAULT_USERNAME}")
+    else:
+        existing.password_hash = hash_password(settings.ADMIN_DEFAULT_PASSWORD)
+        existing.must_change_password = False
+        await db.commit()
