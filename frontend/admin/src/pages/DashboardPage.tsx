@@ -99,9 +99,12 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-gray-50">
       {/* Top bar */}
       <div className="bg-navy text-white px-6 py-4 flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-bold text-saffron">Admin Dashboard</h1>
-          <p className="text-xs text-gray-400">Walk for Peace Media Credentials</p>
+        <div className="flex items-center gap-3">
+          <img src="/logo.png" alt="" className="w-8 h-8 object-contain" />
+          <div>
+            <h1 className="text-lg font-bold text-saffron">Admin Dashboard</h1>
+            <p className="text-xs text-gray-400">Walk for Peace Media Credentials</p>
+          </div>
         </div>
         <div className="flex items-center gap-4">
           <Link to="/logs" className="text-gray-400 hover:text-white flex items-center gap-1 text-sm">

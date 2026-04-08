@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Shield, Loader2, AlertCircle } from 'lucide-react'
+import { Loader2, AlertCircle } from 'lucide-react'
 import { adminLogin, changePassword } from '@walkforpeace/shared'
 
 export default function LoginPage() {
@@ -50,7 +50,7 @@ export default function LoginPage() {
     <div className="min-h-screen bg-navy flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl p-8 max-w-sm w-full">
         <div className="text-center mb-6">
-          <Shield className="w-12 h-12 text-saffron mx-auto mb-3" />
+          <img src="/logo.png" alt="Walk for Peace" className="w-12 h-12 mx-auto mb-3 object-contain" />
           <h1 className="text-xl font-bold text-navy">Admin Dashboard</h1>
           <p className="text-gray-500 text-sm">Walk for Peace Sri Lanka</p>
         </div>

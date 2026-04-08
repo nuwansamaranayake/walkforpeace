@@ -48,7 +48,12 @@ export default function QRScanner({ onScan, scanning }: QRScannerProps) {
     scanner
       .start(
         { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 },
+        {
+          fps: 15,
+          qrbox: { width: 200, height: 200 },
+          aspectRatio: 1.0,
+          experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+        },
         (decodedText) => onScan(decodedText),
         () => {},
       )

@@ -48,7 +48,7 @@ services:
       ADMIN_DEFAULT_PASSWORD: ${ADMIN_DEFAULT_PASSWORD}
       VERIFY_PASSWORD: ${VERIFY_PASSWORD}
       VERIFY_SESSION_HOURS: ${VERIFY_SESSION_HOURS:-24}
-      CORS_ORIGINS: https://register.walkforpeacelk.org,https://verify.walkforpeacelk.org,https://admin.walkforpeacelk.org
+      CORS_ORIGINS: https://register.walkforpeacelk.org,https://verify.walkforpeacelk.org,https://admin.walkforpeacelk.org,https://walkforpeacelk.org,https://www.walkforpeacelk.org
     volumes:
       - uploads:/app/uploads
     networks:
@@ -84,6 +84,16 @@ services:
     networks:
       - walkforpeace-net
 
+  frontend-www:
+    build:
+      context: .
+      dockerfile: frontend/www/Dockerfile
+    restart: "no"
+    volumes:
+      - www_build:/app/dist
+    networks:
+      - walkforpeace-net
+
   nginx:
     build: ./nginx
     restart: unless-stopped
@@ -92,12 +102,14 @@ services:
       - frontend-register
       - frontend-verify
       - frontend-admin
+      - frontend-www
     ports:
       - "8080:80"
     volumes:
       - register_build:/var/www/register:ro
       - verify_build:/var/www/verify:ro
       - admin_build:/var/www/admin:ro
+      - www_build:/var/www/www:ro
     labels:
       - "traefik.enable=true"
       # Register subdomain
@@ -115,6 +127,11 @@ services:
       - "traefik.http.routers.wfp-admin.entrypoints=websecure"
       - "traefik.http.routers.wfp-admin.tls.certresolver=letsencrypt"
       - "traefik.http.routers.wfp-admin.service=wfp-nginx"
+      # WWW / root domain
+      - "traefik.http.routers.wfp-www.rule=Host(`walkforpeacelk.org`) || Host(`www.walkforpeacelk.org`)"
+      - "traefik.http.routers.wfp-www.entrypoints=websecure"
+      - "traefik.http.routers.wfp-www.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.wfp-www.service=wfp-nginx"
       # Single service — nginx handles Host-based routing internally
       - "traefik.http.services.wfp-nginx.loadbalancer.server.port=80"
     healthcheck:
@@ -131,6 +148,7 @@ volumes:
   register_build:
   verify_build:
   admin_build:
+  www_build:
 
 networks:
   walkforpeace-net:

@@ -6,6 +6,7 @@ export default function LandingPage() {
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Header */}
       <header className="bg-navy text-white py-10 text-center">
+        <img src="/logo.png" alt="Walk for Peace" className="w-12 h-12 mx-auto mb-3 object-contain" />
         <h1 className="text-3xl md:text-4xl font-bold text-saffron tracking-tight">
           Walk for Peace Sri Lanka
         </h1>

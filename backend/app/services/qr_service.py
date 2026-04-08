@@ -30,7 +30,9 @@ def generate_qr_code(credential_token: str) -> bytes:
 
     # Use plain PilImage — StyledPilImage introduces anti-aliasing that
     # blurs module edges and hurts scanning at small print sizes.
-    img = qr.make_image(fill_color=(27, 42, 74), back_color=(255, 255, 255))
+    # Use pure black for maximum contrast — navy fill caused scan failures
+    # on many phone cameras.
+    img = qr.make_image(fill_color=(0, 0, 0), back_color=(255, 255, 255))
 
     # Ensure crisp pixel-perfect output — resize with NEAREST to avoid blurring
     target = max(600, img.size[0])

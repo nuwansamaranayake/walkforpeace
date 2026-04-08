@@ -99,13 +99,13 @@ def generate_badge_pdf(
     qr_size = min(available_h, available_w)
 
     try:
-        qr_img = Image.open(io.BytesIO(qr_code_bytes))
-        # Upscale for crisp print: target ~600px with NEAREST (no blur)
-        qr_print_px = 600
+        qr_img = Image.open(io.BytesIO(qr_code_bytes)).convert("RGB")
+        # Upscale to 1200px with NEAREST for crisp pixel-perfect print
+        qr_print_px = 1200
         if qr_img.size[0] < qr_print_px:
             qr_img = qr_img.resize((qr_print_px, qr_print_px), Image.NEAREST)
         qr_buf = io.BytesIO()
-        qr_img.save(qr_buf, format="PNG")
+        qr_img.save(qr_buf, format="PNG", compress_level=0)
         qr_buf.seek(0)
         qr_reader = ImageReader(qr_buf)
         qr_x = (W - qr_size) / 2

@@ -28,23 +28,7 @@ export default function PasswordPage() {
     <div className="min-h-screen bg-navy flex flex-col items-center justify-center px-4">
       {/* Branding */}
       <div className="mb-8 text-center">
-        {/* Lock icon SVG */}
-        <div className="flex justify-center mb-4">
-          <svg
-            width="48"
-            height="48"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="#E8930A"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-          </svg>
-        </div>
+        <img src="/logo.png" alt="Walk for Peace" className="w-16 h-16 mx-auto mb-3 object-contain" />
         <h1 className="text-2xl font-bold text-white tracking-wide">Walk for Peace</h1>
         <p className="text-saffron text-sm mt-1 font-medium uppercase tracking-widest">
           Credential Verification
