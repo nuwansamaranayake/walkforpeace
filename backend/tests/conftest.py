@@ -42,3 +42,11 @@ def test_images():
         'id_face_crop': make_img(300, 400, '#334455'),
         'face_photo': make_img(400, 400, '#445566'),
     }
+
+
+@pytest_asyncio.fixture
+async def verify_session(client):
+    """Get a verify session token."""
+    resp = await client.post('/api/verify/auth', json={'password': 'Peace2026Verify'})
+    assert resp.status_code == 200
+    return resp.json()['session_token']
