@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import {
   Users, Clock, CheckCircle, XCircle,
   Search, LogOut, ChevronLeft, ChevronRight, ClipboardList,
-  ScanLine, ShieldCheck, Smartphone, MapPin,
+  ScanLine, ShieldCheck, Smartphone, MapPin, Database,
 } from 'lucide-react'
 import {
   getApplications, getStats, batchApprove, getGatekeepers, getScanActivity, StatusBadge,
@@ -203,6 +203,24 @@ export default function DashboardPage() {
             </div>
           ))}
         </div>
+
+        {/* Backup Status */}
+        {stats?.backup && (
+          <div className={`rounded-lg px-4 py-2 mb-4 flex items-center justify-between text-xs ${
+            stats.backup.status === 'success' ? 'bg-green-50 text-green-700 border border-green-200'
+            : 'bg-yellow-50 text-yellow-700 border border-yellow-200'
+          }`}>
+            <div className="flex items-center gap-2">
+              <Database className="w-3.5 h-3.5" />
+              <span className="font-medium">Last Backup:</span>
+              <span>{stats.backup.last_backup_at ? timeAgo(stats.backup.last_backup_at) : 'Never'}</span>
+              {stats.backup.last_backup_size_hr && (
+                <span className="text-gray-500">({stats.backup.last_backup_size_hr})</span>
+              )}
+            </div>
+            <span className="text-gray-500">{stats.backup.total_backups} backup(s) stored</span>
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="flex border-b border-gray-200 mb-6">

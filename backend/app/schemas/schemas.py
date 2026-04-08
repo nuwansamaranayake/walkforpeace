@@ -163,6 +163,15 @@ class VerifyResponse(BaseModel):
 
 
 # --- Stats ---
+class BackupStatus(BaseModel):
+    last_backup_at: Optional[str] = None
+    last_backup_size: Optional[int] = None
+    last_backup_size_hr: Optional[str] = None
+    last_backup_key: Optional[str] = None
+    total_backups: int = 0
+    status: str = "unknown"
+
+
 class DashboardStats(BaseModel):
     total_registered: int
     pending: int
@@ -172,6 +181,7 @@ class DashboardStats(BaseModel):
     credentials_issued: int
     total_scans_today: int = 0
     active_gatekeepers: int = 0
+    backup: Optional[BackupStatus] = None
 
 
 # --- v2: Retrieve ---

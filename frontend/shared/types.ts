@@ -63,6 +63,15 @@ export interface LoginResponse {
   must_change_password: boolean
 }
 
+export interface BackupStatus {
+  last_backup_at: string | null
+  last_backup_size: number | null
+  last_backup_size_hr: string | null
+  last_backup_key: string | null
+  total_backups: number
+  status: string
+}
+
 export interface DashboardStats {
   total_registered: number
   pending: number
@@ -71,6 +80,7 @@ export interface DashboardStats {
   flagged: number
   total_scans_today: number
   active_gatekeepers: number
+  backup: BackupStatus | null
 }
 
 export interface ApplicationListItem {

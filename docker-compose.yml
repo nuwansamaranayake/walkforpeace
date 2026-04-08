@@ -37,7 +37,7 @@ services:
       R2_ENDPOINT_URL: ${R2_ENDPOINT_URL:-}
       R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
       R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
-      R2_BUCKET_NAME: ${R2_BUCKET_NAME:-walkforpeace-media}
+      R2_BUCKET_NAME: ${R2_BUCKET_NAME:-walkforpeace-lk}
       R2_PUBLIC_URL: ${R2_PUBLIC_URL:-}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
@@ -51,6 +51,7 @@ services:
       CORS_ORIGINS: https://register.walkforpeacelk.org,https://verify.walkforpeacelk.org,https://admin.walkforpeacelk.org,https://walkforpeacelk.org,https://www.walkforpeacelk.org
     volumes:
       - uploads:/app/uploads
+      - ./backup-status.json:/app/backup-status.json:ro
     networks:
       - walkforpeace-net
 

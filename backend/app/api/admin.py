@@ -1,7 +1,9 @@
 """Admin dashboard API routes."""
+import json
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -25,6 +27,7 @@ from app.schemas.schemas import (
     ApplicationDetail,
     ApplicationListItem,
     ApplicationListResponse,
+    BackupStatus,
     BatchApproveRequest,
     BatchApproveResponse,
     ChangePasswordRequest,
@@ -667,6 +670,16 @@ async def dashboard_stats(
         )
     ).scalar()
 
+    # Read backup status file (bind-mounted from host, written by backup-db.sh)
+    backup = None
+    backup_status_path = Path("/app/backup-status.json")
+    if backup_status_path.exists():
+        try:
+            backup_data = json.loads(backup_status_path.read_text())
+            backup = BackupStatus(**backup_data)
+        except Exception:
+            pass
+
     return DashboardStats(
         total_registered=total or 0,
         pending=pending or 0,
@@ -676,4 +689,5 @@ async def dashboard_stats(
         credentials_issued=creds or 0,
         total_scans_today=scans_today or 0,
         active_gatekeepers=active_gk or 0,
+        backup=backup,
     )
