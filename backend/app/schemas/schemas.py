@@ -51,8 +51,10 @@ class RegisterRequest(BaseModel):
 
 class RegisterResponse(BaseModel):
     ref_number: str
+    pin_code: str
     message: str
     status: str
+    qr_code_url: Optional[str] = None
 
 
 class StatusResponse(BaseModel):
@@ -94,6 +96,8 @@ class ApplicationListItem(BaseModel):
     status: str
     face_match_score: Optional[float] = None
     face_match_flagged: bool = False
+    pin_code: Optional[str] = None
+    id_number: Optional[str] = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -105,6 +109,10 @@ class ApplicationDetail(ApplicationListItem):
     id_document_url: str
     id_face_crop_url: str
     face_photo_url: str
+    id_number: Optional[str] = None
+    id_type: Optional[str] = None
+    ocr_extracted_name: Optional[str] = None
+    ocr_extracted_id: Optional[str] = None
     admin_notes: Optional[str] = None
     reviewed_at: Optional[datetime] = None
     reviewed_by: Optional[UUID] = None
@@ -136,6 +144,7 @@ class CredentialInfo(BaseModel):
     issued_at: datetime
     expires_at: datetime
     is_revoked: bool
+    verification_status: str = "pending"
 
     model_config = {"from_attributes": True}
 
@@ -161,6 +170,85 @@ class DashboardStats(BaseModel):
     rejected: int
     flagged_face_match: int
     credentials_issued: int
+
+
+# --- v2: Retrieve ---
+class RetrieveResponse(BaseModel):
+    ref_number: str
+    pin_code: str
+    full_name: str
+    organization: str
+    status: str
+    verification_status: str
+    qr_code_url: Optional[str] = None
+    badge_pdf_url: Optional[str] = None
+    badge_number: Optional[str] = None
+    message: str
+
+
+# --- v2: OCR ---
+class OCRResponse(BaseModel):
+    id_number: Optional[str] = None
+    name: Optional[str] = None
+    confidence: Optional[str] = None
+
+
+# --- v2: Verify Auth ---
+class VerifyAuthRequest(BaseModel):
+    password: str
+
+
+class VerifyAuthResponse(BaseModel):
+    session_token: str
+    expires_at: datetime
+
+
+# --- v2: Tiered Verify ---
+class VerifyResponseV2(BaseModel):
+    valid: bool
+    status: str
+    verification_status: Optional[str] = None
+    full_name: Optional[str] = None
+    organization: Optional[str] = None
+    designation: Optional[str] = None
+    media_type: Optional[str] = None
+    face_photo_url: Optional[str] = None
+    id_face_crop_url: Optional[str] = None
+    face_match_score: Optional[float] = None
+    badge_number: Optional[str] = None
+    can_gate_approve: Optional[bool] = None
+    message: str
+
+
+# --- v2: Batch Approve ---
+class BatchApproveRequest(BaseModel):
+    application_ids: list[str]
+
+
+class BatchApproveResponse(BaseModel):
+    approved_count: int
+    message: str
+
+
+# --- v2: Verification Log Entry ---
+class VerificationLogItem(BaseModel):
+    id: UUID
+    credential_id: UUID
+    badge_number: Optional[str] = None
+    full_name: Optional[str] = None
+    scanned_at: datetime
+    scanned_by_ip: Optional[str] = None
+    result: str
+    verified_by_action: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class VerificationLogResponse(BaseModel):
+    items: list[VerificationLogItem]
+    total: int
+    page: int
+    page_size: int
 
 
 # --- Upload ---
