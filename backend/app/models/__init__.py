@@ -1,21 +1,2 @@
-from app.models.models import (
-    Base,
-    MediaApplication,
-    Credential,
-    AdminUser,
-    VerificationLog,
-    MediaType,
-    ApplicationStatus,
-    VerificationResult,
-)
-
-__all__ = [
-    "Base",
-    "MediaApplication",
-    "Credential",
-    "AdminUser",
-    "VerificationLog",
-    "MediaType",
-    "ApplicationStatus",
-    "VerificationResult",
-]
+from app.models.models import Base, MediaApplication, Credential, AdminUser, VerificationLog
+from app.models.verify_session import VerifySession

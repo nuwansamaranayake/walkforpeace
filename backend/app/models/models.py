@@ -71,6 +71,13 @@ class MediaApplication(Base):
         Boolean, default=False
     )  # True if score < threshold
 
+    # v2: PIN-based retrieval and ID info
+    pin_code = Column(String(20), unique=True, nullable=True, index=True)
+    id_number = Column(String(50), nullable=True, index=True)
+    id_type = Column(String(20), nullable=True, default="nic")
+    ocr_extracted_name = Column(String(200), nullable=True)
+    ocr_extracted_id = Column(String(50), nullable=True)
+
     status = Column(
         Enum(
             ApplicationStatus,
@@ -132,6 +139,9 @@ class Credential(Base):
     )
     expires_at = Column(DateTime(timezone=True), nullable=False)
     is_revoked = Column(Boolean, default=False, nullable=False)
+    verification_status = Column(
+        String(20), nullable=False, default="pending"
+    )  # pending | approved | flagged | rejected | revoked
 
     application = relationship("MediaApplication", back_populates="credential")
     verification_logs = relationship("VerificationLog", back_populates="credential")
@@ -175,5 +185,8 @@ class VerificationLog(Base):
         ),
         nullable=False,
     )
+    verified_by_action = Column(
+        String(20), nullable=True
+    )  # null | "gate_approved" | "gate_denied"
 
     credential = relationship("Credential", back_populates="verification_logs")
