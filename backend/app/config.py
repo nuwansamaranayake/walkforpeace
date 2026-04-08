@@ -65,6 +65,13 @@ class Settings:
         "ADMIN_DEFAULT_PASSWORD", "WalkForPeace2026!"
     )
 
+    # Verify subdomain
+    VERIFY_PASSWORD: str = os.getenv("VERIFY_PASSWORD", "Peace2026Verify")
+    VERIFY_SESSION_HOURS: int = int(os.getenv("VERIFY_SESSION_HOURS", "24"))
+
+    # CORS — explicit origin list for multi-subdomain
+    CORS_ORIGINS: str = os.getenv("CORS_ORIGINS", "")
+
     @property
     def use_r2(self) -> bool:
         return bool(self.R2_ENDPOINT_URL and self.R2_ACCESS_KEY_ID)
